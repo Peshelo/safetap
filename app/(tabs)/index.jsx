@@ -1,33 +1,123 @@
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Linking, Alert } from 'react-native';
-import React, { useState } from 'react';
-import { Stack } from 'expo-router';
-import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Linking, Alert, Vibration, StyleSheet, Image, StatusBar, FlatList, RefreshControl } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { router, Stack } from 'expo-router';
+import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import pb from '../../lib/connection';
+import * as Location from 'expo-location';
+import * as SecureStore from 'expo-secure-store';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 const Home = () => {
-  const [caseId, setCaseId] = useState('');
   const [loading, setLoading] = useState(false);
-  const [caseDetails, setCaseDetails] = useState(null);
   const [error, setError] = useState(null);
+  const [userPhone, setUserPhone] = useState(null);
+  const [newsArticles, setNewsArticles] = useState([]);
+  // SOS state
+  const [sosCountdown, setSosCountdown] = useState(3);
+  const [isSosPressed, setIsSosPressed] = useState(false);
+  const [userLocation, setUserLocation] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
-  const handleSearchCase = async () => {
-    if (!caseId.trim()) {
-      setError('Please enter a case ID');
-      return;
+  const fetchUserPhone = async () => {
+    const savedInfo = await SecureStore.getItemAsync('userEmergencyInfo');
+    const userInfo = JSON.parse(savedInfo);
+    if (userInfo) {
+      setUserPhone(userInfo.phoneNumber);
     }
-    
-    setLoading(true);
-    setError(null);
-    
+  };
+
+  const fetchNewsArticles = async () => {
     try {
-      const record = await pb.collection('cases').getOne(caseId);
-      setCaseDetails(record);
+      setLoading(true);
+      const records = await pb.collection('news').getFullList({
+        sort: '-created',
+      });
+      setNewsArticles(records);
     } catch (err) {
-      setError('Case not found. Please check your ID and try again.');
-      setCaseDetails(null);
+      setError('Failed to fetch news articles');
+      console.error(err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  useEffect(() => {
+    fetchUserPhone();
+    getLocation();
+    fetchNewsArticles();
+  }, []);
+
+  const getLocation = async () => {
+    let { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'Location permission is required for SOS.');
+      return;
+    }
+
+    let location = await Location.getCurrentPositionAsync({});
+    const { latitude, longitude } = location.coords;
+    setUserLocation(`${latitude},${longitude}`);
+  };
+
+  // SOS countdown effect
+  useEffect(() => {
+    let timer;
+    if (isSosPressed && sosCountdown > 0) {
+      timer = setTimeout(() => {
+        setSosCountdown(sosCountdown - 1);
+        Vibration.vibrate(500);
+      }, 1000);
+    } else if (sosCountdown === 0) {
+      triggerSOS();
+    }
+    return () => clearTimeout(timer);
+  }, [isSosPressed, sosCountdown]);
+
+  const triggerSOS = async () => {
+    const formData = new FormData();
+    formData.append("title", "SOS Alert");
+    formData.append("description", "Emergency SOS alert triggered.");
+    formData.append("latitude", userLocation.split(',')[0]);
+    formData.append("longitude", userLocation.split(',')[1]);
+    formData.append("merchant", "oi2mnpx4rc6i655");
+    formData.append("status", "Open");
+    formData.append("priority", "red");
+
+    try {
+      const emergencyContact = userPhone;
+      if (emergencyContact) {  
+        formData.append("phoneNumber", emergencyContact);
+      } else {
+        Alert.alert('Setup Contact to use SOS', 'No emergency contact found. Please set it up in your profile.',
+          [
+            { text: 'Cancel', style: 'cancel'},
+            { text: 'Set up now', onPress: () => router.push('./about'), isPreferred: true },
+          ],
+          { cancelable: true }
+        );
+        return;
+      }
+
+      if (!userLocation) {
+        Alert.alert('Error', 'Unable to fetch your location. Please try again.');
+        return;
+      }
+
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Location permission is required for SOS.');
+        return;
+      }
+
+      await pb.collection('cases').create(formData);
+      Alert.alert('SOS Sent!', `Emergency services have been alerted. Your location: ${userLocation}`);
+    } catch (error) {
+      Alert.alert('Error', 'Unable to send SOS alert.' + error);
+    }
+
+    setIsSosPressed(false);
+    setSosCountdown(3);
   };
 
   const makeEmergencyCall = (number) => {
@@ -35,213 +125,272 @@ const Home = () => {
     Linking.openURL(url).catch(() => Alert.alert('Error', 'Could not make the call'));
   };
 
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchNewsArticles();
+  };
+
   const emergencyActions = [
     {
-      title: 'Police',
-      subtitle: 'Emergency',
-      number: '999',
+      title: 'Police Hotline',
+      subtitle: 'Toll free',
+      number: '08005462',
       icon: 'shield-alt',
       color: '#2563eb',
-      bgColor: '#eff6ff'
+      bgColor: '#eff6ff',
+      path: null
     },
     {
-      title: 'Ambulance',
-      subtitle: 'Medical',
-      number: '994',
-      icon: 'ambulance',
+      title: 'Emergency',
+      subtitle: 'Call Center',
+      number: '911',
+      icon: 'phone',
       color: '#dc2626',
-      bgColor: '#fef2f2'
+      bgColor: '#fef2f2',
+      path: null
     },
     {
-      title: 'Fire',
-      subtitle: 'Brigade',
-      number: '993',
-      icon: 'fire-extinguisher',
+      title: 'Child Helpline',
+      subtitle: 'Toll free',
+      number: '+263242255583',
+      icon: 'child',
       color: '#ea580c',
-      bgColor: '#fff7ed'
+      bgColor: '#fff7ed',
+      path: null
     },
     {
-      title: 'ZRP',
-      subtitle: 'Hotline',
-      number: '0242 700 171',
-      icon: 'phone-alt',
+      title: 'Find Police Station',
+      subtitle: 'Get a list of police stations',
+      number: null,
+      icon: 'arrow-right',
       color: '#059669',
-      bgColor: '#ecfdf5'
+      bgColor: '#ecfdf5',
+      path: "(tabs)/contacts"
     }
   ];
 
-  return (
-    <ScrollView className="bg-gray-50 flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
-      <Stack.Screen options={{ 
-        title: "Safety Hub",
-        headerTitleStyle: {
-          fontWeight: '600',
-          fontSize: 18
-        }
-      }} />
-      
-      <View className="px-5 pt-6">
-        {/* Emergency Quick Access */}
-        <View className="mb-8">
-          <Text className="text-2xl font-bold mb-5 text-gray-900">Emergency Services</Text>
-          
-          <View className="flex-row flex-wrap justify-between h-fit" style={{ gap: 12 }}>
-            {emergencyActions.map((action, index) => (
-              <View key={index} className="w-[48%] h-fit">
-                <TouchableOpacity
-                  onPress={() => makeEmergencyCall(action.number)}
-                >
-                  <View 
-                    className="rounded-xl p-4 h-fit"
-                    style={{ backgroundColor: action.color }}
-                  >
-                    <View className="flex-row items-center  mb-3">
-                      <View className="w-10 h-10 rounded-lg items-center justify-center mr-3" 
-                        style={{ backgroundColor: action.bgColor + '50' }}>
-                        <FontAwesome5 
-                          name={action.icon} 
-                          size={18} 
-                          color={action.bgColor} 
-                        />
-                      </View>
-                      <View>
-                        <Text className="text-base font-semibold text-white">
-                          {action.title}
-                        </Text>
-                        <Text className="text-xs text-gray-50">
-                          {action.subtitle}
-                        </Text>
-                      </View>
-                    </View>
-                    <Text className="text-lg font-bold" style={{ color: action.bgColor }}>
-                      {action.number}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* Case Status Section */}
-        <View className="bg-white rounded-2xl p-5 mb-8 shadow-sm">
-          <View className="flex-row items-center mb-5">
-            <View className="bg-blue-100 p-2 rounded-lg mr-4">
-              <Ionicons name="document-text" size={20} color="#2563eb" />
-            </View>
-            <View>
-              <Text className="text-lg font-semibold text-gray-900">Case Tracking</Text>
-              <Text className="text-gray-500 text-sm">Check your reported case status</Text>
-            </View>
-          </View>
-          
-          <View className="flex-row items-center mb-1">
-            <TextInput
-              className="flex-1 h-12 px-4 bg-gray-50 border border-gray-200 rounded-l-lg text-base"
-              placeholder="Enter case ID"
-              placeholderTextColor="#9ca3af"
-              value={caseId}
-              onChangeText={setCaseId}
-              onSubmitEditing={handleSearchCase}
-            />
-            <TouchableOpacity 
-              className="h-12 w-12 items-center justify-center bg-blue-600 rounded-r-lg"
-              onPress={handleSearchCase}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="white" size="small" />
-              ) : (
-                <Ionicons name="search" size={18} color="white" />
-              )}
-            </TouchableOpacity>
-          </View>
-          
-          {error && (
-            <Text className="text-red-500 text-xs mt-1 ml-1">{error}</Text>
-          )}
-        </View>
-
-        {/* Case Details Card */}
-        {caseDetails && (
-          <View className="bg-white rounded-2xl p-5 mb-8 shadow-sm">
-            <View className="flex-row items-center justify-between mb-4">
-              <Text className="text-lg font-semibold text-gray-900">Case Details</Text>
-              <View className={`px-2 py-1 rounded-full ${
-                caseDetails.status === 'Open' ? 'bg-amber-100' : 
-                caseDetails.status === 'Resolved' ? 'bg-green-100' : 'bg-gray-100'
-              }`}>
-                <Text className={`text-xs font-medium ${
-                  caseDetails.status === 'Open' ? 'text-amber-800' : 
-                  caseDetails.status === 'Resolved' ? 'text-green-800' : 'text-gray-800'
-                }`}>
-                  {caseDetails.status}
-                </Text>
-              </View>
-            </View>
-            
-            <View className="space-y-3">
-              <View className="flex-row justify-between">
-                <Text className="text-gray-500 text-sm">Case ID</Text>
-                <Text className="text-gray-900 text-sm font-medium">{caseDetails.id}</Text>
-              </View>
-              
-              <View className="flex-row justify-between">
-                <Text className="text-gray-500 text-sm">Type</Text>
-                <Text className="text-gray-900 text-sm font-medium">{caseDetails.title}</Text>
-              </View>
-              
-              <View className="flex-row justify-between">
-                <Text className="text-gray-500 text-sm">Date Reported</Text>
-                <Text className="text-gray-900 text-sm font-medium">
-                  {new Date(caseDetails.created).toLocaleDateString()}
-                </Text>
-              </View>
-              
-              <View className="pt-2">
-                <Text className="text-gray-500 text-sm mb-1">Description</Text>
-                <Text className="text-gray-900 text-sm leading-5">{caseDetails.description}</Text>
-              </View>
-            </View>
-          </View>
+  const renderNewsItem = ({ item }) => (
+    <TouchableOpacity 
+      onPress={() => router.push(`/news/${item.id}`)}
+      className="mb-4"
+    >
+      <View className="bg-white rounded-xl overflow-hidden shadow-sm">
+        {item.image && (
+          <Image 
+            source={{ uri: pb.getFileUrl(item, item.image) }}
+            className="w-full h-40"
+            resizeMode="cover"
+          />
         )}
-
-        {/* Quick Actions */}
-        <View>
-          <Text className="text-2xl font-bold mb-5 text-gray-900">Quick Actions</Text>
-          <View className="flex-row flex-wrap justify-between" style={{ gap: 12 }}>
-            {[
-              { title: 'Report Crime', icon: 'police-badge', color: '#2563eb', number: '999' },
-              { title: 'Medical Help', icon: 'ambulance', color: '#dc2626', number: '994' },
-              { title: 'Fire Emergency', icon: 'fire-extinguisher', color: '#ea580c', number: '993' },
-              { title: 'Other Help', icon: 'alert-circle', color: '#059669', number: '0242700171' },
-            ].map((action, index) => (
-              <View key={index} className="w-[48%]">
-                <TouchableOpacity 
-                  className="bg-white rounded-xl p-4 h-fit shadow-sm"
-                  onPress={() => makeEmergencyCall(action.number)}
-                >
-                  <View className="items-center">
-                    <View className="w-12 h-12 rounded-full items-center justify-center mb-3" 
-                      style={{ backgroundColor: action.color + '20' }}>
-                      <MaterialCommunityIcons 
-                        name={action.icon} 
-                        size={20} 
-                        color={action.color}
-                      />
-                    </View>
-                    <Text className="text-sm font-medium text-center text-gray-900">
-                      {action.title}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
-            ))}
+        <View className="p-4">
+          <Text className="text-lg font-semibold text-gray-900 mb-1">{item.title}</Text>
+          <Text className="text-gray-500 text-sm mb-2">
+            {item.description?.replace(/<[^>]*>/g, '').substring(0, 60)}...
+          </Text>
+          <View className="flex-row items-center">
+            <Ionicons name="time-outline" size={14} color="#9ca3af" />
+            <Text className="text-gray-400 text-xs ml-1">
+              {new Date(item.created).toLocaleDateString()}
+            </Text>
           </View>
         </View>
       </View>
-    </ScrollView>
+    </TouchableOpacity>
+  );
+
+  return (
+    <GestureHandlerRootView className="flex-1 bg-gray-50">
+      <StatusBar barStyle={'dark-content'} backgroundColor={'#fff'} />
+      <Stack.Screen options={{ 
+        title: 'Services',
+        headerShown: true,
+        headerRight: () => (
+          <Image
+            source={require('../../assets/images/logo.jpg')} 
+            className="w-10 h-10 rounded-full"
+          />
+        )
+      }} />
+      
+      <ScrollView 
+        className="flex-1" 
+        contentContainerStyle={{ paddingBottom: 32 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={['#2563eb']}
+            tintColor="#2563eb"
+          />
+        }
+      >
+        <View className="px-5 pt-6">
+          {/* Emergency Quick Access */}
+          <View className="mb-8">
+            <View className="flex-row flex-wrap justify-between h-fit" style={{ gap: 12 }}>
+              {emergencyActions.map((action, index) => (
+                <View key={index} className="w-[48%] h-fit">
+                  {action.number ? (
+                    <TouchableOpacity onPress={() => makeEmergencyCall(action.number)}>
+                      <View 
+                        className="rounded-xl p-4 h-fit"
+                        style={{ backgroundColor: action.color }}
+                      >
+                        <View className="flex-row items-center mb-3">
+                          <View className="w-10 h-10 rounded-lg items-center justify-center mr-3" 
+                            style={{ backgroundColor: action.bgColor + '50' }}>
+                            <FontAwesome5 
+                              name={action.icon} 
+                              size={18} 
+                              color={action.bgColor} 
+                            />
+                          </View>
+                          <View>
+                            <Text className="text-base font-semibold text-white">
+                              {action.title}
+                            </Text>
+                            <Text className="text-xs text-gray-50">
+                              {action.subtitle}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text className="text-sm font-light" style={{ color: action.bgColor }}>
+                          Call now
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity onPress={() => router.push(action.path)}>
+                      <View 
+                        className="rounded-xl p-4 h-fit"
+                        style={{ backgroundColor: action.color }}
+                      >
+                        <View className="flex-row justify-between items-center mb-3">
+                          <View className="w-full">
+                            <Text className="text-base font-semibold text-white">
+                              {action.title}
+                            </Text>
+                            <Text className="text-xs text-gray-50">
+                              {action.subtitle}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text className="text-sn font-bold" style={{ color: action.bgColor }}>
+                          Police Stations
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* SOS Button Section */}
+          <View className="mb-8">
+            <Text className="text-2xl font-bold mb-5 text-gray-900">Emergency SOS</Text>
+            <View className="items-center">
+              <TouchableOpacity
+                style={[styles.sosButton, isSosPressed && styles.sosButtonActive]}
+                className="w-full"
+                onPressIn={() => {
+                  setIsSosPressed(true);
+                  setSosCountdown(3);
+                }}
+                onPressOut={() => {
+                  if (sosCountdown > 0) {
+                    setIsSosPressed(false);
+                    setSosCountdown(3);
+                  }
+                }}
+                activeOpacity={1}
+              >
+                <Text style={styles.sosText}>SOS</Text>
+                <Text style={styles.sosSubtext}>
+                  {isSosPressed 
+                    ? `Keep holding for ${sosCountdown}s...` 
+                    : 'Hold to activate'}
+                </Text>
+              </TouchableOpacity>
+              {userLocation ? (
+                <View className="text-gray-300 text-sm flex flex-row items-center justify-center space-x-3 mt-3 text-center">
+                 <Ionicons name='location' size={15} color={'#808080'}/> 
+                 <Text className="text-gray-500 ml-2">Your location will be shared</Text>
+                </View>
+              ) : (
+                <Text className="text-gray-500 text-sm mt-3 text-center">
+                  Fetching your location...
+                </Text>
+              )}
+            </View>
+          </View>
+
+          {/* News Articles Section */}
+          {/* <View className="mb-4">
+            <View className="flex-row justify-between items-center mb-4">
+              <Text className="text-2xl font-bold text-gray-900">Public Notices</Text>
+              {loading && <ActivityIndicator size="small" color="#2563eb" />}
+            </View>
+            
+            {error ? (
+              <View className="bg-red-50 p-4 rounded-lg">
+                <Text className="text-red-600">{error}</Text>
+                <TouchableOpacity 
+                  onPress={fetchNewsArticles}
+                  className="mt-2"
+                >
+                  <Text className="text-blue-600">Try again</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <FlatList
+                data={newsArticles}
+                renderItem={renderNewsItem}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+                ListEmptyComponent={
+                  <View className="bg-gray-100 p-6 rounded-lg items-center">
+                    <Ionicons name="newspaper-outline" size={32} color="#9ca3af" />
+                    <Text className="text-gray-500 mt-2">No news articles found</Text>
+                  </View>
+                }
+              />
+            )}
+          </View> */}
+        </View>
+      </ScrollView>
+    </GestureHandlerRootView>
   );
 };
+
+const styles = StyleSheet.create({
+  sosButton: {
+    height: 180,
+    borderRadius: 16,
+    backgroundColor: '#dc2626',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  sosButtonActive: {
+    backgroundColor: '#b91c1c',
+    transform: [{ scale: 1.05 }],
+  },
+  sosText: {
+    color: 'white',
+    fontSize: 48,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  sosSubtext: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+});
 
 export default Home;

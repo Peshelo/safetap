@@ -1,26 +1,28 @@
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, Image, Alert } from 'react-native';
 import React from 'react';
-import { Stack, useRouter } from 'expo-router';
+import { Link, Stack, useRouter } from 'expo-router';
 import { GestureHandlerRootView, ScrollView } from 'react-native-gesture-handler';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
+import { StatusBar } from 'react-native';
 
 const Reports = () => {
     const router = useRouter();
     const emergencyTypes = [
-        { id: 1, title: "Fire", icon: "flame", iconSet: 'Ionicons', color: "#f97316" },
-        { id: 2, title: "Medical Emergency", icon: "medical-bag", iconSet: 'MaterialCommunityIcons', color: "#22c55e" },
-        { id: 3, title: "Crime", icon: "handcuffs", iconSet: 'MaterialCommunityIcons', color: "#ef4444" },
-        { id: 4, title: "Accident", icon: "car-crash", iconSet: 'FontAwesome5', color: "#eab308" },
-        { id: 5, title: "Natural Disaster", icon: "weather-hurricane", iconSet: 'MaterialCommunityIcons', color: "#8b5cf6" },
-        { id: 6, title: "Domestic Violence", icon: "home-heart", iconSet: 'MaterialCommunityIcons', color: "#ec4899" },
-        { id: 7, title: "Suspicious Activity", icon: "eye", iconSet: 'Ionicons', color: "#0ea5e9" },
-        { id: 8, title: "Theft", icon: "shopping-bag", iconSet: 'FontAwesome5', color: "#f59e0b" },
-        { id: 9, title: "Lost Item", icon: "help-circle", iconSet: 'Ionicons', color: "#b45309" },
-        { id: 10, title: "Traffic Violation", icon: "traffic-light", iconSet: 'MaterialCommunityIcons', color: "#dc2626" },
+        // { id: 1, title: "Fire", icon: "flame", iconSet: 'Ionicons', color: "#f97316" },
+        // { id: 2, title: "Robbery", icon: "money-bill", iconSet: 'FontAwesome5', color: "#2563eb", merchant: 'dvlppj72naeig7q' },
+        { id: 3, title: "Crime", icon: "handcuffs", iconSet: 'MaterialCommunityIcons', color: "#ef4444",merchant: 'dvlppj72naeig7q',path:'crime' },
+        { id: 4, title: "Accident", icon: "car-crash", iconSet: 'FontAwesome5', color: "#eab308",path:'accident' },
+        // { id: 5, title: "Natural Disaster", icon: "weather-hurricane", iconSet: 'MaterialCommunityIcons', color: "#8b5cf6" },
+        // { id: 6, title: "Domestic Violence", icon: "home-heart", iconSet: 'MaterialCommunityIcons', color: "#ec4899", merchant: 'dvlppj72naeig7q' },
+        // { id: 7, title: "Suspicious Activity", icon: "eye", iconSet: 'Ionicons', color: "#0ea5e9", merchant: 'dvlppj72naeig7q' },
+        // { id: 8, title: "Theft", icon: "shopping-bag", iconSet: 'FontAwesome5', color: "#f59e0b", merchant: 'dvlppj72naeig7q' },
+        // { id: 9, title: "Lost Item", icon: "help-circle", iconSet: 'Ionicons', color: "#b45309" },
+        // { id: 10, title: "Leave a comment or complaint", icon: "comment" , iconSet: 'MaterialCommunityIcons', color: "#0202ff",path:'complaint' },
     ];
 
     const handleReport = (report) => {
-        router.push(`/report/${report.title}` )
+        // Alert.alert(report.path)
+        router.push(`/report/${report.title}`)
     }
 
     const renderIcon = (iconSet, iconName, color) => {
@@ -38,17 +40,21 @@ const Reports = () => {
 
     return (
         <GestureHandlerRootView className="flex-1 bg-gray-50">
-            <Stack.Screen options={{ 
-                title: "Report a Case",
-                headerTitleStyle: {
-                    fontWeight: '600',
-                    fontSize: 18
-                },
-                headerShown: true,
-            }} />
+                  <StatusBar barStyle={'dark-content'} backgroundColor={'#fff'} />
             
-            <View className="p-4">
-                <Text className="text-lg px-2 text-gray-600 mb-4">Select the type of emergency</Text>
+               <Stack.Screen options={{ 
+                             title: 'Report',
+                             headerShown: true,
+                             headerRight: () => (
+                               <Image
+                                 source={require('../../assets/images/logo.jpg')} 
+                               className="logoHeader"
+                               />
+                             )
+                           }} />
+            
+            <View className="p-2">
+                <Text className="text-lg px-2 text-gray-600 mt-10 mb-2">Select the type of emergency</Text>
                 
                 <ScrollView>
                     <View className="space-y-3 p-2 scroll-mb-10">
@@ -72,6 +78,23 @@ const Reports = () => {
                                 <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
                             </TouchableOpacity>
                         ))}
+                        <Text className="mt-10 text-gray-600">Feel free to leave a comment</Text>
+                          <Link href="/report/complaint"  
+                                className="flex bg-white rounded-xl mt-2 p-5 w-full flex-row items-center justify-between shadow-sm"
+                            >
+                                <View className="flex-row items-center justify-between">
+                                    <View 
+                                        className="w-10 h-10 rounded-lg items-center justify-center mr-4"
+                                        style={{ backgroundColor: '#0202ff20' }}
+                                    >
+                                        {renderIcon("MaterialCommunityIcons", "comment", "#0202ff")}
+                                    </View>
+                                    <Text className="text-base font-medium text-gray-900">
+                                    Leave a comment or complaint
+                                    </Text>
+                                </View>
+                                {/* <Ionicons name="chevron-forward" size={18} color="#9ca3af" /> */}
+                            </Link>
                     </View>
                 </ScrollView>
             </View>

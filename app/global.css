@@ -1,3 +1,21 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Now want css */
+@layer base {
+  html {
+    font-size: 16px;
+  }
+  body {
+    font-family: 'Inter', sans-serif;
+    background-color: #f0f0f0;
+    color: #333;
+  }
+  .logoHeader {
+    width: 40px;
+    height: 40px;
+    border-radius: 20px;
+    margin-right: 15;
+  }
+}

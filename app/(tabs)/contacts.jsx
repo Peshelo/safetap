@@ -1,10 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, FlatList, Linking } from 'react-native';
+import { 
+  View, 
+  Text, 
+  TouchableOpacity, 
+  ScrollView, 
+  TextInput, 
+  ActivityIndicator, 
+  FlatList, 
+  Image, 
+  StatusBar,
+  StyleSheet,
+  Dimensions
+} from 'react-native';
 import { Picker } from '@react-native-picker/picker';
-import { FontAwesome5, Ionicons } from '@expo/vector-icons';
+import { FontAwesome5, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import pb from '../../lib/connection';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack, useRouter } from 'expo-router';
+import * as Network from 'expo-network';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
+
+const { width } = Dimensions.get('window');
 
 // Zimbabwe provinces and districts
 const zimbabweProvinces = {
@@ -24,28 +41,61 @@ const EmergencyContacts = () => {
   const [contacts, setContacts] = useState([]);
   const [filteredContacts, setFilteredContacts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProvince, setSelectedProvince] = useState('');
   const [selectedDistrict, setSelectedDistrict] = useState('');
   const [districts, setDistricts] = useState([]);
+  const [isOffline, setIsOffline] = useState(false);
   const router = useRouter();
 
-  // Load contacts on mount
+  // Load contacts from cache or API
   useEffect(() => {
-    const fetchContacts = async () => {
+    const loadData = async () => {
       try {
-        const records = await pb.collection('contacts').getFullList();
-        setContacts(records);
-        setFilteredContacts(records);
+        // Check network status
+        const networkState = await Network.getNetworkStateAsync();
+        setIsOffline(!networkState.isConnected);
+
+        // Try to load from cache first
+        // const cachedContacts = await SecureStore.getItemAsync('emergencyContacts');
+        const cachedContacts = await AsyncStorage.getItem('emergencyContacts');
+        if (cachedContacts) {
+          setContacts(JSON.parse(cachedContacts));
+          setFilteredContacts(JSON.parse(cachedContacts));
+        }
+
+        // Fetch fresh data if online
+        if (networkState.isConnected) {
+          await fetchContacts();
+        } else if (!cachedContacts) {
+          Alert.alert("Offline", "No cached data available. Please connect to the internet to load contacts.");
+        }
       } catch (error) {
-        console.error('Failed to fetch contacts:', error);
+        console.error('Error loading data:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchContacts();
+    loadData();
   }, []);
+
+  const fetchContacts = async () => {
+    setSyncing(true);
+    try {
+      const records = await pb.collection('contacts').getFullList();
+      setContacts(records);
+      setFilteredContacts(records);
+      await SecureStore.setItemAsync('emergencyContacts', JSON.stringify(records));
+      // await AsyncStorage.setItem('emergencyContacts', JSON.stringify(records));
+    } catch (error) {
+      console.error('Failed to fetch contacts:', error);
+      Alert.alert("Error", "Failed to sync contacts. Please try again.");
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   // Update districts when province changes
   useEffect(() => {
@@ -66,8 +116,8 @@ const EmergencyContacts = () => {
       const term = searchTerm.toLowerCase();
       results = results.filter(contact => 
         contact.station.toLowerCase().includes(term) ||
-        contact.member_in_charge.toLowerCase().includes(term) ||
-        contact.specialty.toLowerCase().includes(term)
+        (contact.member_in_charge && contact.member_in_charge.toLowerCase().includes(term)) ||
+        (contact.specialty && contact.specialty.toLowerCase().includes(term))
       );
     }
 
@@ -101,125 +151,263 @@ const EmergencyContacts = () => {
 
   const renderContactItem = ({ item }) => (
     <TouchableOpacity
-      className="bg-white rounded-xl p-5 mb-3 shadow-sm"
+      style={styles.contactCard}
       onPress={() => handleContactPress(item)}
+      activeOpacity={0.8}
     >
-      <View className="flex-row items-center mb-2">
-        <View className="bg-blue-100 p-2 rounded-lg mr-4">
-          <FontAwesome5 name="building" size={16} color="#2563eb" />
-        </View>
-        <View className="flex-1">
-          <Text className="text-lg font-semibold text-gray-900">{item.station}</Text>
-          <Text className="text-gray-500 text-sm">{item.province} - {item.district}</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+      <View style={styles.contactIcon}>
+        <FontAwesome5 name="building" size={16} color="#4a6da7" />
       </View>
-      <Text className="text-gray-900 mt-2">
-        <Text className="font-medium">{item.member_in_charge}</Text>
-        <Text className="text-gray-500"> ({item.specialty})</Text>
-      </Text>
+      <View style={styles.contactInfo}>
+        <Text style={styles.stationName}>{item.station}</Text>
+        <Text style={styles.locationText}>{item.province} • {item.district}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color="#a0aec0" />
     </TouchableOpacity>
   );
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ScrollView className="bg-gray-50 flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
-        <Stack.Screen options={{ 
-          title: "Station Contacts",
-          headerTitleStyle: {
-            fontWeight: '600',
-            fontSize: 18
-          },
-          headerShown: true,
-        }} />
-        
-        <View className="px-5 pt-6">
-          {/* Search and Filters */}
-          <View style={{backgroundColor:'#2563eb'}} className="text-white rounded-2xl p-5 mb-6 shadow-sm">
-            <View className="flex-row items-center mb-4">
-              <View className="bg-blue-100 p-2 rounded-lg mr-4">
-                <FontAwesome5 name="search" size={16} color="#2563eb" />
-              </View>
-              <View>
-                <Text className="text-lg font-semibold text-white">Find Stations</Text>
-                <Text className="text-gray-50 text-sm">Search by location or specialty</Text>
-              </View>
-            </View>
-            
-            <TextInput
-              className="h-12 px-4 bg-gray-50 border border-gray-200 rounded-lg text-base mb-4"
-              placeholder="Search stations or officers"
-              placeholderTextColor="#9ca3af"
-              value={searchTerm}
-              onChangeText={setSearchTerm}
+      <StatusBar barStyle={'dark-content'} backgroundColor={'#fff'} />
+      
+      <Stack.Screen  options={{ 
+        title: 'Stations',
+        headerShown: true,
+        headerRight: () => (
+          <TouchableOpacity onPress={fetchContacts} disabled={syncing}>
+            <MaterialIcons 
+              name="sync" 
+              size={24} 
+              color={syncing ? '#cbd5e0' : '#4a6da7'} 
+              style={{ marginRight: 15 }} 
             />
-            
-            <View className="mb-3">
-              <Text className="text-gray-50 text-sm mb-1">Province</Text>
-              <View className="border border-gray-200 rounded-lg bg-gray-50">
-                <Picker
-                  selectedValue={selectedProvince}
-                  onValueChange={(value) => setSelectedProvince(value)}
-                  dropdownIconColor="#6b7280"
-                >
-                  <Picker.Item label="All Provinces" value="" />
-                  {Object.keys(zimbabweProvinces).map((province) => (
-                    <Picker.Item key={province} label={province} value={province} />
-                  ))}
-                </Picker>
-              </View>
+          </TouchableOpacity>
+        )
+      }} />
+      
+      <ScrollView 
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Search and Filters */}
+        <View style={styles.filterContainer}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search stations..."
+            placeholderTextColor="#a0aec0"
+            value={searchTerm}
+            onChangeText={setSearchTerm}
+          />
+          
+          <View style={styles.pickerRow}>
+            <View style={[styles.pickerContainer, { marginRight: 10 }]}>
+              <Picker
+                selectedValue={selectedProvince}
+                onValueChange={setSelectedProvince}
+                style={styles.picker}
+                dropdownIconColor="#718096"
+              >
+                <Picker.Item label="All Provinces" value="" />
+                {Object.keys(zimbabweProvinces).map((province) => (
+                  <Picker.Item key={province} label={province} value={province} />
+                ))}
+              </Picker>
             </View>
 
             {selectedProvince && (
-              <View className="mb-3">
-                <Text className="text-gray-600 text-sm mb-1">District</Text>
-                <View className="border border-gray-200 rounded-lg bg-gray-50">
-                  <Picker
-                    selectedValue={selectedDistrict}
-                    onValueChange={(value) => setSelectedDistrict(value)}
-                    dropdownIconColor="#6b7280"
-                  >
-                    <Picker.Item label="All Districts" value="" />
-                    {districts.map((district) => (
-                      <Picker.Item key={district} label={district} value={district} />
-                    ))}
-                  </Picker>
-                </View>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={selectedDistrict}
+                  onValueChange={setSelectedDistrict}
+                  style={styles.picker}
+                  dropdownIconColor="#718096"
+                >
+                  <Picker.Item label="All Districts" value="" />
+                  {districts.map((district) => (
+                    <Picker.Item key={district} label={district} value={district} />
+                  ))}
+                </Picker>
               </View>
             )}
           </View>
-
-          {/* Results */}
-          {loading ? (
-            <View className="flex-1 justify-center items-center py-8">
-              <ActivityIndicator size="large" color="#2563eb" />
-            </View>
-          ) : (
-            <View>
-              <Text className="text-lg font-semibold text-gray-900 mb-3">
-                {filteredContacts.length} {filteredContacts.length === 1 ? 'Station' : 'Stations'} Found
-              </Text>
-              
-              {filteredContacts.length === 0 ? (
-                <View className="bg-white rounded-xl p-6 items-center justify-center">
-                  <FontAwesome5 name="building" size={32} color="#9ca3af" className="mb-3" />
-                  <Text className="text-gray-500 text-center">No stations match your search criteria</Text>
-                </View>
-              ) : (
-                <FlatList
-                  data={filteredContacts}
-                  renderItem={renderContactItem}
-                  keyExtractor={(item) => item.id}
-                  scrollEnabled={false}
-                  contentContainerStyle={{ paddingBottom: 20 }}
-                />
-              )}
+          
+          {isOffline && (
+            <View style={styles.offlineBanner}>
+              <MaterialIcons name="signal-wifi-off" size={16} color="#fff" />
+              <Text style={styles.offlineText}>Offline Mode - Showing cached data</Text>
             </View>
           )}
         </View>
+
+        {/* Results */}
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#4a6da7" />
+          </View>
+        ) : (
+          <View style={styles.resultsContainer}>
+            <View style={styles.resultsHeader}>
+              <Text style={styles.resultsTitle}>
+                {filteredContacts.length} {filteredContacts.length === 1 ? 'Station' : 'Stations'}
+              </Text>
+              {syncing && <ActivityIndicator size="small" color="#4a6da7" style={{ marginLeft: 8 }} />}
+            </View>
+            
+            {filteredContacts.length === 0 ? (
+              <View style={styles.emptyState}>
+                <FontAwesome5 name="building" size={40} color="#cbd5e0" />
+                <Text style={styles.emptyText}>No stations found</Text>
+                <Text style={styles.emptySubtext}>Try adjusting your search filters</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={filteredContacts}
+                renderItem={renderContactItem}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+                contentContainerStyle={{ paddingBottom: 20 }}
+              />
+            )}
+          </View>
+        )}
       </ScrollView>
     </GestureHandlerRootView>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  contentContainer: {
+    paddingBottom: 32,
+  },
+  filterContainer: {
+    padding: 16,
+    backgroundColor: '#fff',
+    marginBottom: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  searchInput: {
+    height: 48,
+    paddingHorizontal: 16,
+    backgroundColor: '#f7fafc',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    fontSize: 16,
+    color: '#2d3748',
+    marginBottom: 12,
+  },
+  pickerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  pickerContainer: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    backgroundColor: '#f7fafc',
+    overflow: 'hidden',
+  },
+  picker: {
+    // height: 48,
+    width: '100%',
+    color: '#2d3748',
+  },
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e53e3e',
+    padding: 8,
+    borderRadius: 4,
+    marginTop: 12,
+  },
+  offlineText: {
+    color: '#fff',
+    marginLeft: 8,
+    fontSize: 12,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  resultsContainer: {
+    paddingHorizontal: 16,
+  },
+  resultsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  resultsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#2d3748',
+  },
+  contactCard: {
+    backgroundColor: '#fff',
+    // borderRadius: 8,
+    padding: 16,
+    // marginBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+
+    flexDirection: 'row',
+    alignItems: 'center',
+    // shadowColor: '#000',
+    // shadowOffset: { width: 0, height: 1 },
+    // shadowOpacity: 0.05,
+    // shadowRadius: 3,
+    // elevation: 1,
+  },
+  contactIcon: {
+    backgroundColor: '#ebf2ff',
+    padding: 10,
+    borderRadius: 8,
+    marginRight: 16,
+  },
+  contactInfo: {
+    flex: 1,
+  },
+  stationName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2d3748',
+    marginBottom: 4,
+  },
+  locationText: {
+    fontSize: 13,
+    color: '#718096',
+  },
+  emptyState: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#4a5568',
+    marginTop: 16,
+    fontWeight: '500',
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#a0aec0',
+    marginTop: 4,
+  },
+});
 
 export default EmergencyContacts;

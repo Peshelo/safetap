@@ -9,15 +9,18 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.peshelgomo.safetap"
+      "supportsTablet": true
     },
     "android": {
+      "permissions": [
+       "android.permission.CALL_PHONE",
+        "android.permission.READ_CONTACTS",
+        "android.permission.WRITE_CONTACTS"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-
       "package": "com.peshelgomo.safetap"
     },
     "web": {

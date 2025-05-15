@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Vibration, Image } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, Vibration, Image, StatusBar } from 'react-native';
 import { Stack } from 'expo-router';
 import * as Location from 'expo-location';
-import call from 'react-native-phone-call';
+import pb from '../../lib/connection';
+import { get } from 'react-native/Libraries/TurboModule/TurboModuleRegistry';
+// import call from 'react-native-phone-call';
 
 const SOSPage = () => {
   const [countdown, setCountdown] = useState(3);
@@ -38,7 +40,9 @@ const SOSPage = () => {
     return () => clearTimeout(timer);
   }, [isPressed, countdown]);
 
-  const triggerSOS = () => {
+
+
+  const triggerSOS = async () => {
     // Call emergency number
     // const args = {
     //   number: '999', 
@@ -47,7 +51,26 @@ const SOSPage = () => {
     // call(args).catch((error) => Alert.alert('Error', 'Unable to make the call.'));
 
     // Send location to emergency contacts (implementation would go here)
-    Alert.alert('SOS Sent!', `Emergency services have been alerted. Your location: ${userLocation}`);
+       const formData = new FormData();
+          formData.append("title", "SOS Alert");
+          formData.append("description", "Emergency SOS alert triggered.");
+          // Get city from location using reverse geocoding (optional)
+
+          formData.append("latitude", userLocation.split(',')[0]);
+          formData.append("longitude", userLocation.split(',')[1]);
+
+          formData.append("merchant", "oi2mnpx4rc6i655");
+          formData.append("status", "Open");
+          formData.append("priority", "red");
+          // formData.append("user", userId);
+
+    pb.collection('cases').create(formData).then(() => {
+      Alert.alert('SOS Sent!', `Emergency services have been alerted. Your location: ${userLocation}`);
+    }).catch((error) => {
+      Alert.alert('Error', 'Unable to send SOS alert.' + error);
+    });
+
+
     
     // Reset
     setIsPressed(false);
@@ -56,8 +79,10 @@ const SOSPage = () => {
 
   return (
     <View style={styles.container}>
+            <StatusBar barStyle={'dark-content'} backgroundColor={'#fff'} />
+      
       <Stack.Screen options={{ 
-        title: ' SOS',
+        title: 'Send SOS',
         headerShown: true,
         headerRight: () => (
           <Image
@@ -91,7 +116,7 @@ const SOSPage = () => {
       </TouchableOpacity>
 
       {userLocation ? (
-        <Text style={styles.locationText}>Your location will be shared: {userLocation}</Text>
+        <Text style={styles.locationText}>Your location will be shared</Text>
       ) : (
         <Text style={styles.locationText}>Fetching your location...</Text>
       )}

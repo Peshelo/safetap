@@ -14,7 +14,14 @@ const ContactDetails = () => {
   };
 
   const makePhoneCall = (number) => {
-    const url = `tel:${number}`;
+    var url = null;
+    if (number.toString().includes('263')){
+    url = `tel:+${number}`;
+
+    }else{
+      
+    url = `tel:${number}`;
+    }
     Linking.openURL(url).catch(() => Alert.alert('Error', 'Could not make phone call'));
   };
 
@@ -34,41 +41,47 @@ const ContactDetails = () => {
         
         <View className="border-b border-gray-200 pb-4 mb-4">
           <Text className="text-gray-500 text-sm mb-1">Station Number</Text>
-          <Text className="text-gray-900 text-base font-medium">{params.station_number}</Text>
+          <Text className="text-gray-900 text-base font-medium">{params.station_number.toString().includes('263') ? '+' : ''}{params.station_number}</Text>
         </View>
 
         <View className="border-b border-gray-200 pb-4 mb-6">
           <Text className="text-gray-500 text-sm mb-1">Member in Charge</Text>
           <Text className="text-gray-900 text-base font-medium mb-1">
-            {params.member_in_charge} <Text className="text-gray-500">({params.specialty})</Text>
+            {params.member_in_charge}
           </Text>
-          <Text className="text-gray-900 text-base">{params.member_in_charge_number}</Text>
+          <Text className="text-gray-900 text-base">{params.member_in_charge.toString().includes('263') ? '+' : ''}{params.member_in_charge_number}</Text>
         </View>
 
         <View className="flex-row justify-between">
-          <TouchableOpacity 
+         {params.station_number && 
+         <TouchableOpacity 
             className="flex-1 bg-blue-600 py-3 px-4 rounded-lg flex-row items-center justify-center mr-2"
             onPress={() => makePhoneCall(params.station_number)}
           >
             <FontAwesome5 name="phone" size={18} color="white" />
             <Text className="text-white font-medium ml-2">Call Station</Text>
           </TouchableOpacity>
+         } 
           
           {params.member_in_charge_number && (
             <TouchableOpacity 
-              className="w-12 h-12 bg-green-500 rounded-lg items-center justify-center mx-1"
+              className="w-fit flex flex-row space-x-4 p-2 px-4 h-12 bg-green-500 rounded-lg items-center justify-center mx-1"
               onPress={() => makePhoneCall(params.member_in_charge_number)}
             >
-              <FontAwesome5 name="user" size={18} color="white" />
+                            <FontAwesome5 name="user" size={18} color="white" />
+
+              <Text className="text-white font-bold ml-2">Call OIC</Text>
             </TouchableOpacity>
           )}
           
+          {params.whatsapp_number &&
           <TouchableOpacity 
             className="w-12 h-12 bg-green-600 rounded-lg items-center justify-center ml-2"
             onPress={() => openWhatsApp(params.whatsapp_number)}
           >
             <FontAwesome5 name="whatsapp" size={18} color="white" />
           </TouchableOpacity>
+          }
         </View>
       </View>
 

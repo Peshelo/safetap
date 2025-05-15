@@ -21,7 +21,15 @@ import { Stack, useLocalSearchParams } from "expo-router";
 const cities = [
   "Harare", "Bulawayo", "Chitungwiza", "Mutare", "Epworth", 
   "Gweru", "Kwekwe", "Kadoma", "Masvingo", "Chinhoyi",
-  // ... rest of your cities
+  "Marondera", "Beitbridge", "Victoria Falls", "Zvishavane",
+  "Masvingo", "Norton", "Redcliff", "Shurugwi", "Chegutu",
+  "Kariba", "Bindura", "Goromonzi", "Murehwa", "Mutoko",
+  "Bikita", "Chiredzi", "Chipinge", "Nyanga", "Rusape",
+  "Mudzi", "Hwedza", "Seke", "Zvimba", "Makonde",
+  "Mhangura", "Zaka", "Buhera", "Chikomba", "Gutu",
+  "Insiza", "Matobo", "Umguza", "Bubi", "Mangwe",
+  "Nkayi", "Lupane", "Hwange", "Binga", "Beitbridge",
+  "Chiredzi", "Masvingo", "Shurugwi", "Kwekwe", "Gweru",
 ];
 
 const priorities = [
@@ -34,6 +42,7 @@ const Case = () => {
   const params = useLocalSearchParams();
   const [description, setDescription] = useState("");
   const [selectedCity, setSelectedCity] = useState("");
+  const [phone_number, setPhoneNumber] = useState("");
   const [selectedPriority, setSelectedPriority] = useState("");
   const [selectedMerchant, setSelectedMerchant] = useState("");
   const [loading, setLoading] = useState(false);
@@ -103,13 +112,17 @@ const Case = () => {
       formData.append("title", params.case);
       formData.append("description", description);
       formData.append("city", selectedCity);
+      formData.append("phoneNumber", phone_number);
       formData.append("address", await SecureStore.getItemAsync('user_address'));
       formData.append("latitude", location.latitude.toString());
       formData.append("longitude", location.longitude.toString());
-      formData.append("merchant", selectedMerchant);
+      // All got to traffic and will be assigned to the merchant
+      formData.append("merchant", "dvlppj72naeig7q");
+     
+      // formData.append("merchant", selectedMerchant);
       formData.append("status", "Open");
-      formData.append("priority", selectedPriority);
-      formData.append("phoneNumber", await SecureStore.getItemAsync('user_phone'));
+      formData.append("priority", "red");
+      // formData.append("phoneNumber", await SecureStore.getItemAsync('user_phone'));
 
       if (imageUri) {
         const fileName = imageUri.split("/").pop();
@@ -135,6 +148,7 @@ const Case = () => {
     setDescription("");
     setSelectedCity("");
     setSelectedPriority("");
+    setPhoneNumber("");
     setSelectedMerchant("");
     setImageUri(null);
     setErrors({});
@@ -193,7 +207,27 @@ const Case = () => {
       
       <View style={{ marginBottom: 24 }}>
         <Text style={{ fontSize: 18, fontWeight: '600', color: '#0f172a', marginBottom: 16 }}>Emergency Details</Text>
-        
+        <View style={{ backgroundColor: 'white', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+          <Text style={{ fontWeight: '500', color: '#334155', marginBottom: 8 }}>Phone Number</Text>
+          <TextInput
+            style={{
+              textAlignVertical: 'top',
+              padding: 12,
+              backgroundColor: '#f8fafc',
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: errors.description ? '#ef4444' : '#e2e8f0',
+              marginBottom: 4
+            }}
+            placeholder="Enter your phoneNumber..."
+            value={phone_number}
+            onChangeText={setPhoneNumber}
+          />
+          {errors.description && (
+            <Text style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.description}</Text>
+          )}
+        </View>
+      
         <View style={{ backgroundColor: 'white', borderRadius: 12, padding: 16, marginBottom: 16 }}>
           <Text style={{ fontWeight: '500', color: '#334155', marginBottom: 8 }}>Description</Text>
           <TextInput
@@ -217,7 +251,7 @@ const Case = () => {
           )}
         </View>
 
-        <View style={{ backgroundColor: 'white', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+        {/* <View style={{ backgroundColor: 'white', borderRadius: 12, padding: 16, marginBottom: 16 }}>
           <Text style={{ fontWeight: '500', color: '#334155', marginBottom: 8 }}>Location</Text>
           <View style={{ borderWidth: 1, borderColor: errors.city ? '#ef4444' : '#e2e8f0', borderRadius: 8, marginBottom: 12 }}>
             <Picker
@@ -251,8 +285,8 @@ const Case = () => {
           {errors.priority && (
             <Text style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.priority}</Text>
           )}
-        </View>
-
+        </View> */}
+{/* 
         <View style={{ backgroundColor: 'white', borderRadius: 12, padding: 16, marginBottom: 16 }}>
           <Text style={{ fontWeight: '500', color: '#334155', marginBottom: 8 }}>Assigned Merchant</Text>
           <View style={{ borderWidth: 1, borderColor: errors.merchant ? '#ef4444' : '#e2e8f0', borderRadius: 8 }}>
@@ -270,7 +304,7 @@ const Case = () => {
           {errors.merchant && (
             <Text style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.merchant}</Text>
           )}
-        </View>
+        </View> */}
 
         <View style={{ backgroundColor: 'white', borderRadius: 12, padding: 16, marginBottom: 16 }}>
           <Text style={{ fontWeight: '500', color: '#334155', marginBottom: 12 }}>Attach Photo (Optional)</Text>
