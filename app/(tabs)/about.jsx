@@ -5,40 +5,34 @@ import * as SecureStore from 'expo-secure-store';
 import { TextInput } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const About = () => {
-  const [userInfo, setUserInfo] = useState({
-    // name: '',
-    // bloodType: '',
-    // allergies: '',
-    emergencyContact: '',
-    // medicalConditions: '',
-    // includeInAlerts: false
-  });
+  const [contact, setContact] = useState('');
   const [isEditing, setIsEditing] = useState(false);
 
   // Load saved user info
   useEffect(() => {
     const loadUserInfo = async () => {
       try {
-        const savedInfo = await SecureStore.getItemAsync('userEmergencyInfo');
+        const savedInfo = await SecureStore.getItemAsync('userContact');
         if (savedInfo) {
-          setUserInfo(JSON.parse(savedInfo));
+          setContact(savedInfo);
         }
       } catch (error) {
-        console.error('Failed to load user info', error);
+        console.error('Failed to load user contact', error);
       }
     };
     loadUserInfo();
   }, []);
 
-  const handleInputChange = (field, value) => {
-    setUserInfo(prev => ({ ...prev, [field]: value }));
-  };
+  // const handleInputChange = (field, value) => {
+  //   setContact(prev => ({ ...prev, [field]: value }));
+  // };
 
   const saveUserInfo = async () => {
     try {
-      await SecureStore.setItemAsync('userEmergencyInfo', JSON.stringify(userInfo));
+      await SecureStore.setItemAsync('userContact', contact);
       Alert.alert('Success', 'Your information has been saved securely');
       setIsEditing(false);
     } catch (error) {
@@ -58,15 +52,8 @@ const About = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await SecureStore.deleteItemAsync('userEmergencyInfo');
-              setUserInfo({
-                // name: '',
-                // bloodType: '',
-                // allergies: '',
-                emergencyContact: '',
-                // medicalConditions: '',
-                // includeInAlerts: false
-              });
+              await SecureStore.deleteItemAsync('userContact');
+              setContact(null)
               Alert.alert('Success', 'Your information has been deleted');
             } catch (error) {
               Alert.alert('Error', 'Failed to delete your information');
@@ -95,7 +82,7 @@ const About = () => {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>About SafetyTap</Text>
         <Text style={styles.sectionText}>
-        SafeTap connects Zimbabweans to police services for fast emergency reporting and crime prevention.
+        SafeTap connects Zimbabweans to the ZRP Police Services for fast emergency reporting and crime prevention.
         </Text>
         <Text style={styles.sectionText}>
           Version 1.0.0 {"\n"}
@@ -110,8 +97,8 @@ NB: Data about your Emergency Profile will not be secured stored on your device.
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Emergency Profile</Text>
           {!isEditing ? (
-            <TouchableOpacity onPress={() => setIsEditing(true)}>
-              <MaterialIcons name="edit" size={24} color="#3B82F6" />
+            <TouchableOpacity >
+              {/* <MaterialIcons name="edit" size={24} color="#3B82F6" /> */}
             </TouchableOpacity>
           ) : (
             <TouchableOpacity onPress={saveUserInfo}>
@@ -143,8 +130,8 @@ NB: Data about your Emergency Profile will not be secured stored on your device.
             <TextInput
               style={styles.input}
               placeholder="Emergency Contact Number (e.g. 0777723454)"
-              value={userInfo.emergencyContact}
-              onChangeText={(text) => handleInputChange('emergencyContact', text)}
+              value={contact}
+              onChangeText={(text) => setContact(text)}
               keyboardType="phone-pad"
             />
             {/* <TextInput
@@ -166,12 +153,12 @@ NB: Data about your Emergency Profile will not be secured stored on your device.
           </>
         ) : (
           <>
-            {userInfo.emergencyContact ? (
+            {contact ? (
               <>
                 {/* <InfoRow icon="person" label="Name" value={userInfo.name} /> */}
                 {/* <InfoRow icon="bloodtype" label="Blood Type" value={userInfo.bloodType} /> */}
                 {/* <InfoRow icon="warning" label="Allergies" value={userInfo.allergies} /> */}
-                <InfoRow icon="phone" label="Emergency Contact" value={userInfo.emergencyContact} />
+                <InfoRow icon="phone" label="Emergency Contact" value={contact} />
                 {/* <InfoRow icon="medical-services" label="Medical Conditions" value={userInfo.medicalConditions} /> */}
                 {/* <InfoRow 
                   icon="notifications" 
@@ -186,12 +173,12 @@ NB: Data about your Emergency Profile will not be secured stored on your device.
         )}
 
         <TouchableOpacity 
-          style={userInfo.emergencyContact ? styles.resetButton : styles.addButton} 
-          onPress={userInfo.emergencyContact ? resetUserInfo : () => setIsEditing(true)}
+          style={contact ? styles.resetButton : styles.addButton} 
+          onPress={contact ? resetUserInfo : () => setIsEditing(true)}
         >
-          {userInfo.emergencyContact ? (
+          {contact ? (
              <Text style={styles.resetButtonText}>
-            {userInfo.emergencyContact ? 'Reset All Information' : 'Clear Storage'}
+            {contact ? 'Reset All Information' : 'Clear Storage'}
           </Text>
           ) : (
             <Text style={styles.addButtonText}>
@@ -302,6 +289,7 @@ const styles = StyleSheet.create({
     color: '#111827',
     borderWidth: 1,
     borderColor: '#E5E7EB',
+
   },
   infoRow: {
     flexDirection: 'row',

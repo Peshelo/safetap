@@ -6,6 +6,7 @@ import pb from '../../lib/connection';
 import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const Home = () => {
   const [loading, setLoading] = useState(false);
@@ -19,11 +20,14 @@ const Home = () => {
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchUserPhone = async () => {
-    const savedInfo = await SecureStore.getItemAsync('userEmergencyInfo');
-    const userInfo = JSON.parse(savedInfo);
-    if (userInfo) {
-      setUserPhone(userInfo.phoneNumber);
-    }
+    const savedInfo = await SecureStore.getItemAsync('userContact');
+    // console.log('Saved Info:', savedInfo);
+          setUserPhone(savedInfo);
+
+    // const userInfo = JSON.parse(savedInfo);
+    // if (userInfo) {
+    //   setUserPhone(savedInfo);
+    // }
   };
 
   const fetchNewsArticles = async () => {
@@ -75,6 +79,8 @@ const Home = () => {
   }, [isSosPressed, sosCountdown]);
 
   const triggerSOS = async () => {
+      // await fetchUserPhone();
+
     const formData = new FormData();
     formData.append("title", "SOS Alert");
     formData.append("description", "Emergency SOS alert triggered.");
@@ -85,8 +91,10 @@ const Home = () => {
     formData.append("priority", "red");
 
     try {
-      const emergencyContact = userPhone;
-      if (emergencyContact) {  
+          const contactNumber = await SecureStore.getItemAsync('userContact');
+
+      const emergencyContact = contactNumber;
+      if (emergencyContact || !emergencyContact === '' || !emergencyContact === null) {  
         formData.append("phoneNumber", emergencyContact);
       } else {
         Alert.alert('Setup Contact to use SOS', 'No emergency contact found. Please set it up in your profile.',
@@ -229,7 +237,7 @@ const Home = () => {
           <View className="mb-8">
             <View className="flex-row flex-wrap justify-between h-fit" style={{ gap: 12 }}>
               {emergencyActions.map((action, index) => (
-                <View key={index} className="w-[48%] h-fit">
+                <View key={index} className="w-[48%] max-w-sm:w-full h-fit">
                   {action.number ? (
                     <TouchableOpacity onPress={() => makeEmergencyCall(action.number)}>
                       <View 

@@ -87,7 +87,7 @@ const EmergencyContacts = () => {
       const records = await pb.collection('contacts').getFullList();
       setContacts(records);
       setFilteredContacts(records);
-      await SecureStore.setItemAsync('emergencyContacts', JSON.stringify(records));
+      await AsyncStorage.setItem('emergencyContacts', JSON.stringify(records));
       // await AsyncStorage.setItem('emergencyContacts', JSON.stringify(records));
     } catch (error) {
       console.error('Failed to fetch contacts:', error);

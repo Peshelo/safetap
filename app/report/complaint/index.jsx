@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { FontAwesome5 } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { router, Stack, useLocalSearchParams } from "expo-router";
 import pb from "../../../lib/connection";
 
 const commentTypes = [
@@ -52,6 +52,11 @@ const Case = () => {
       await pb.collection("comments").create(data);
       setSuccess(true);
       resetForm();
+      Alert.alert(
+        "Success",
+        `Your ${commentType.toLowerCase()} has been submitted successfully!`
+      );
+      router.replace("/(tabs)/tackcase");
     } catch (error) {
       console.error("Submission error:", error);
       Alert.alert("Error", "Failed to submit. Please try again.");

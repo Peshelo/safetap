@@ -1,15 +1,33 @@
-import { ActivityIndicator, Image, Text, TouchableOpacity, View } from 'react-native'
-import React, { Component, useState } from 'react'
+import { ActivityIndicator, Image, ScrollView, Text, TouchableOpacity, View } from 'react-native'
+import React, { Component, use, useEffect, useState } from 'react'
 import pb from '../../lib/connection';
 import { Ionicons } from '@expo/vector-icons';
 import { GestureHandlerRootView, TextInput } from 'react-native-gesture-handler';
 import { Stack } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default TrackCase = () => {
       const [caseDetails, setCaseDetails] = useState(null);
         const [caseId, setCaseId] = useState('');
         const [loading, setLoading] = useState(false);
         const [error, setError] = useState(null);
+        const [previousCases, setPreviousCases] = useState([]);
+
+       const fetchPreviousCases = async () => {
+      //     const existingCases = await AsyncStorage.getItem("cases");
+      // const mycases = existingCases ? JSON.parse(existingCases) : [];
+      // mycases.push(record);
+      // await AsyncStorage.setItem("cases", JSON.stringify(mycases));
+      // Now get the previous cases from AsyncStorage
+      try {
+      const existingCases = await AsyncStorage.getItem("cases");
+      const mycases = existingCases ? JSON.parse(existingCases) : [];
+      console.log(mycases);
+      setPreviousCases(mycases);
+      } catch (error) {
+        console.error("Error fetching previous cases:", error);
+      }
+        }
 
        const handleSearchCase = async () => {
     if (!caseId.trim()) {
@@ -30,8 +48,12 @@ export default TrackCase = () => {
       setLoading(false);
     }
   };
+  useEffect(() => {
+    fetchPreviousCases();
+  },[]);
+
     return (
-        <View className="bg-gray-50 flex-1">
+        <ScrollView className="bg-gray-50 flex-1">
              <Stack.Screen options={{
             title: 'Track Case',
             headerShown: true,
@@ -126,9 +148,55 @@ export default TrackCase = () => {
                 <Text className="text-gray-900 text-sm leading-5">{caseDetails.description}</Text>
               </View>
             </View>
+            {/* if case has image */}
+            {caseDetails.image && (
+              <View className="mt-4">
+                <Image
+                  source={{ uri: caseDetails.image }}
+                  className="w-full h-40 rounded-lg"
+                  resizeMode="cover"
+                />
+              </View>
+            )}
           </View>
         )}
+
+        <Text className="text-gray-700 text-lg text-left ml-5 mt-5">
+          My Cases
+        </Text>
+        <View className="bg-white rounded-2xl p-5 mt-4">
+          
+          {previousCases.map((caseItem, index) => (
+            <TouchableOpacity onPress={
+              () => {
+                setCaseId(caseItem.id);
+                handleSearchCase();
+              }
+            } key={index} className="flex-row justify-between mb-3 p-2 border-b border-gray-200">
+              <View className="flex flex-row items-center">
+                <View className={`w-10 h-10 rounded-full bg-gray-100 items-center justify-center mr-3`}>
+                  <Ionicons name="document-text" size={20} color="#2563eb" />
+                </View>
+                <View>
+                  <Text className="text-gray-900 text-sm font-medium">{caseItem.title}</Text>
+                  <Text className="text-gray-500 text-sm">{new Date(caseItem.created).toLocaleDateString()}</Text>
+                </View>
+              </View>
+
+              {/* <Text className="text-gray-900 text-sm font-medium">{caseItem.title}</Text>
+              <Text className="text-gray-500 text-sm">{new Date(caseItem.created).toLocaleDateString()}</Text>
+                              <Text className="text-gray-500 text-xs font-medium">{caseItem.id}</Text> */}
+                              <Text className="text-gray-500 text-xs font-medium">View</Text>
+
+            </TouchableOpacity>
+          ))}
+          {previousCases.length < 1 && (
+            <Text className="text-gray-500 text-sm text-center mt-5">
+              No previous cases found.
+            </Text>
+          )}
+          </View>
       </GestureHandlerRootView>
-      </View>
+      </ScrollView>
     )
   }
