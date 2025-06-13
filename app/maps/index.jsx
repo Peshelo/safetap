@@ -15,6 +15,14 @@ import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 import pb from "../../lib/connection";
 import * as Location from "expo-location";
+import CustomHeader from "../components/Header";
+import { useNavigation } from "@react-navigation/native";
+import OfflineBanner from "../components/OfflineBanner";
+import useNetworkStatus from "../hooks/useNetworkStatus";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const CACHE_KEY = "POLICE_STATIONS_CACHE";
+const CACHE_EXPIRY_DAYS = 7;
 
 const PoliceMap = () => {
   const [policeStations, setPoliceStations] = useState([]);
@@ -27,14 +35,104 @@ const PoliceMap = () => {
     longitudeDelta: 0.0421,
   });
 
+  const navigation = useNavigation();
+  const isOnline = useNetworkStatus();
+
+  // const fetchPoliceStations = async () => {
+  //   try {
+  //     setLoading(true);
+  //     const records = await pb.collection("contacts").getFullList({});
+
+  //     setPoliceStations(records);
+  //   } catch (err) {
+  //     console.error("Failed to fetch police stations:", err);
+  //     setPoliceStations([
+  //       {
+  //         id: "1",
+  //         name: "Central Police Station",
+  //         latitude: -17.8292,
+  //         longitude: 31.0522,
+  //         address: "Central Avenue, Harare",
+  //         phone: "+263-4-703631",
+  //       },
+  //       {
+  //         id: "2",
+  //         name: "Highlands Police Station",
+  //         latitude: -17.7852,
+  //         longitude: 31.0735,
+  //         address: "Highlands, Harare",
+  //         phone: "+263-4-776688",
+  //       },
+  //       {
+  //         id: "3",
+  //         name: "Mbare Police Station",
+  //         latitude: -17.8652,
+  //         longitude: 31.0235,
+  //         address: "Mbare, Harare",
+  //         phone: "+263-4-664433",
+  //       },
+  //       {
+  //         id: "4",
+  //         name: "Avondale Police Station",
+  //         latitude: -17.8052,
+  //         longitude: 31.0435,
+  //         address: "Avondale, Harare",
+  //         phone: "+263-4-302211",
+  //       },
+  //       {
+  //         id: "5",
+  //         name: "Borrowdale Police Station",
+  //         latitude: -17.7652,
+  //         longitude: 31.0935,
+  //         address: "Borrowdale, Harare",
+  //         phone: "+263-4-885522",
+  //       },
+  //     ]);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+
   const fetchPoliceStations = async () => {
     try {
       setLoading(true);
-      const records = await pb.collection("contacts").getFullList({});
 
-      setPoliceStations(records);
-    } catch (err) {
-      console.error("Failed to fetch police stations:", err);
+      // First try to fetch fresh data
+      try {
+        const records = await pb.collection("contacts").getFullList({});
+        setPoliceStations(records);
+
+        // Cache the fresh data with timestamp
+        await AsyncStorage.setItem(
+          CACHE_KEY,
+          JSON.stringify({
+            data: records,
+            timestamp: new Date().getTime(),
+          })
+        );
+
+        return; // Exit if successful
+      } catch (onlineErr) {
+        console.log("Online fetch failed, trying cached data...");
+      }
+
+      // If online fetch fails, try to load cached data
+      const cachedData = await AsyncStorage.getItem(CACHE_KEY);
+      if (cachedData) {
+        const { data, timestamp } = JSON.parse(cachedData);
+
+        // Check if cache is expired (7 days)
+        const isCacheExpired =
+          new Date().getTime() - timestamp >
+          CACHE_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+
+        if (!isCacheExpired) {
+          setPoliceStations(data);
+          return;
+        }
+      }
+
+      // If no cache or cache is expired, use hardcoded fallback
       setPoliceStations([
         {
           id: "1",
@@ -44,38 +142,12 @@ const PoliceMap = () => {
           address: "Central Avenue, Harare",
           phone: "+263-4-703631",
         },
-        {
-          id: "2",
-          name: "Highlands Police Station",
-          latitude: -17.7852,
-          longitude: 31.0735,
-          address: "Highlands, Harare",
-          phone: "+263-4-776688",
-        },
-        {
-          id: "3",
-          name: "Mbare Police Station",
-          latitude: -17.8652,
-          longitude: 31.0235,
-          address: "Mbare, Harare",
-          phone: "+263-4-664433",
-        },
-        {
-          id: "4",
-          name: "Avondale Police Station",
-          latitude: -17.8052,
-          longitude: 31.0435,
-          address: "Avondale, Harare",
-          phone: "+263-4-302211",
-        },
-        {
-          id: "5",
-          name: "Borrowdale Police Station",
-          latitude: -17.7652,
-          longitude: 31.0935,
-          address: "Borrowdale, Harare",
-          phone: "+263-4-885522",
-        },
+        // ... rest of your hardcoded stations
+      ]);
+    } catch (err) {
+      console.error("Failed to fetch police stations:", err);
+      setPoliceStations([
+        // ... your hardcoded stations
       ]);
     } finally {
       setLoading(false);
@@ -164,29 +236,21 @@ const PoliceMap = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
       <Stack.Screen
         options={{
-          title: "Police Stations Map",
-          headerShown: true,
-          headerLeft: () => (
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.backButton}
-            >
-              <Ionicons name="arrow-back" size={24} color="#2563eb" />
-            </TouchableOpacity>
-          ),
-          headerRight: () => (
-            <TouchableOpacity
-              onPress={centerOnUser}
-              style={styles.locationButton}
-            >
-              <Ionicons name="location" size={24} color="#2563eb" />
-            </TouchableOpacity>
-          ),
+          headerShown: false,
         }}
       />
+
+      <CustomHeader
+        title="Police Stations Map"
+        subtitle="Find nearby police stations"
+        showBackButton={true}
+        onBack={() => navigation.goBack()}
+        showLogo={false}
+      />
+
+      {!isOnline && <OfflineBanner />}
 
       {loading && (
         <View style={styles.loadingOverlay}>

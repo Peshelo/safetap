@@ -10,20 +10,31 @@ import {
   Modal,
   ScrollView,
   Dimensions,
+  Image,
+  Linking,
+  Platform,
 } from "react-native";
 import React, { useEffect, useState } from "react";
 import { Stack, router } from "expo-router";
 import pb from "../../lib/connection";
 import { Ionicons } from "@expo/vector-icons";
+import CustomHeader from "../components/Header";
+import { useNavigation } from "@react-navigation/native";
+import * as FileSystem from "expo-file-system";
+import * as IntentLauncher from "expo-intent-launcher";
+// import { PDFDocument } from "react-native-pdf";
 
 const { width } = Dimensions.get("window");
 
 const News = () => {
+  const navigation = useNavigation();
   const [news, setNews] = useState([]);
   const [filteredNews, setFilteredNews] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [thumbnails, setThumbnails] = useState({});
+  const [thumbnailLoading, setThumbnailLoading] = useState({});
 
   // Filter states
   const [showFilters, setShowFilters] = useState(false);
@@ -34,6 +45,21 @@ const News = () => {
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewItem, setPreviewItem] = useState(null);
 
+  // const fetchNews = async () => {
+  //   try {
+  //     setLoading(true);
+  //     const records = await pb
+  //       .collection("news")
+  //       .getFullList({ sort: "-created" });
+  //     setNews(records);
+  //     setFilteredNews(records);
+  //   } catch (err) {
+  //     console.error("Failed to fetch news", err);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+
   const fetchNews = async () => {
     try {
       setLoading(true);
@@ -42,6 +68,13 @@ const News = () => {
         .getFullList({ sort: "-created" });
       setNews(records);
       setFilteredNews(records);
+
+      // Generate thumbnails for each item with a file
+      records.forEach((item) => {
+        if (item.file) {
+          generateThumbnail(item);
+        }
+      });
     } catch (err) {
       console.error("Failed to fetch news", err);
     } finally {
@@ -53,6 +86,82 @@ const News = () => {
     setRefreshing(true);
     await fetchNews();
     setRefreshing(false);
+  };
+
+  const getFileUrl = (item) => {
+    if (!item.file) return null;
+    return pb.getFileUrl(item, item.file);
+  };
+
+  // Function to determine file type
+  const getFileType = (url) => {
+    if (!url) return null;
+    const extension = url.split(".").pop().toLowerCase();
+    if (["jpg", "jpeg", "png", "gif"].includes(extension)) return "image";
+    if (extension === "pdf") return "pdf";
+    return null;
+  };
+
+  // Function to download file
+  const downloadFile = async (url) => {
+    try {
+      const fileType = getFileType(url);
+      if (!fileType) return;
+
+      const downloadResumable = FileSystem.createDownloadResumable(
+        url,
+        FileSystem.documentDirectory +
+          `download_${Date.now()}.${fileType === "image" ? "jpg" : "pdf"}`,
+        {}
+      );
+
+      const { uri } = await downloadResumable.downloadAsync();
+
+      if (Platform.OS === "android") {
+        const mimeType =
+          fileType === "image" ? "image/jpeg" : "application/pdf";
+        IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
+          data: uri,
+          flags: 1,
+          type: mimeType,
+        });
+      } else {
+        await Linking.openURL(uri);
+      }
+    } catch (error) {
+      console.error("Download failed:", error);
+    }
+  };
+
+  // Function to generate thumbnail for PDF or use image directly
+  const generateThumbnail = async (item) => {
+    if (!item.file || thumbnailLoading[item.id]) return;
+
+    setThumbnailLoading((prev) => ({ ...prev, [item.id]: true }));
+
+    try {
+      const fileUrl = getFileUrl(item);
+      const fileType = getFileType(fileUrl);
+
+      if (fileType === "image") {
+        // For images, we can use the URL directly as thumbnail
+        setThumbnails((prev) => ({
+          ...prev,
+          [item.id]: { type: "image", uri: fileUrl },
+        }));
+      } else if (fileType === "pdf") {
+        // For PDFs, we'd ideally generate a thumbnail, but in React Native we'll use an icon
+        // In a real app, you might want to use a service to generate PDF thumbnails
+        setThumbnails((prev) => ({
+          ...prev,
+          [item.id]: { type: "pdf", uri: null },
+        }));
+      }
+    } catch (error) {
+      console.error("Thumbnail generation failed:", error);
+    } finally {
+      setThumbnailLoading((prev) => ({ ...prev, [item.id]: false }));
+    }
   };
 
   useEffect(() => {
@@ -133,61 +242,45 @@ const News = () => {
     setPreviewItem(null);
   };
 
-  const renderCard = ({ item }) => (
-    <TouchableOpacity
-      onPress={() => router.push(`/press-release/${item.id}`)}
-      style={styles.cardContainer}
-      activeOpacity={0.7}
-    >
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <View style={styles.iconContainer}>
-            <Ionicons name="document-text" size={24} color="#3b82f6" />
-          </View>
-          <View style={styles.cardHeaderText}>
-            <Text style={styles.title} numberOfLines={2}>
-              {item.title}
-            </Text>
-            <View style={styles.metaContainer}>
-              <Ionicons name="time-outline" size={14} color="#6b7280" />
-              <Text style={styles.dateText}>
-                {new Date(item.created).toLocaleDateString("en-US", {
-                  year: "numeric",
-                  month: "short",
-                  day: "numeric",
-                })}
-              </Text>
-            </View>
-          </View>
-        </View>
+  // const renderCard = ({ item }) => (
+  //   <TouchableOpacity
+  //     onPress={() => router.push(`/press-release/${item.id}`)}
+  //     style={styles.cardContainer}
+  //     activeOpacity={0.7}
+  //   >
+  //     <View style={styles.card}>
+  //       <View style={styles.cardHeader}>
+  //         <View style={styles.iconContainer}>
+  //           <Ionicons name="document-text" size={24} color="#3b82f6" />
+  //         </View>
+  //         <View style={styles.cardHeaderText}>
+  //           <Text style={styles.title} numberOfLines={2}>
+  //             {item.title}
+  //           </Text>
+  //           <View style={styles.metaContainer}>
+  //             <Ionicons name="time-outline" size={14} color="#6b7280" />
+  //             <Text style={styles.dateText}>
+  //               {new Date(item.created).toLocaleDateString("en-US", {
+  //                 year: "numeric",
+  //                 month: "short",
+  //                 day: "numeric",
+  //               })}
+  //             </Text>
+  //           </View>
+  //         </View>
+  //       </View>
 
-        {/* {item.description && (
-          <Text style={styles.description} numberOfLines={3}>
-            {item.description.replace(/<[^>]*>/g, "")}
-          </Text>
-        )} */}
-
-        <View style={styles.cardFooter}>
-          <View style={styles.tagContainer}>
-            <Text style={styles.tag}>Press Release</Text>
-          </View>
-          <View style={styles.cardActions}>
-            {/* <TouchableOpacity
-              onPress={(e) => {
-                e.stopPropagation();
-                openPreview(item);
-              }}
-              style={styles.previewButton}
-            >
-              <Ionicons name="eye-outline" size={16} color="#6b7280" />
-              <Text style={styles.previewText}>Preview</Text>
-            </TouchableOpacity> */}
-            <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
-          </View>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+  //       <View style={styles.cardFooter}>
+  //         <View style={styles.tagContainer}>
+  //           <Text style={styles.tag}>Press Release</Text>
+  //         </View>
+  //         <View style={styles.cardActions}>
+  //           <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
+  //         </View>
+  //       </View>
+  //     </View>
+  //   </TouchableOpacity>
+  // );
 
   const renderFilterModal = () => (
     <Modal
@@ -301,6 +394,73 @@ const News = () => {
     </Modal>
   );
 
+  const renderCard = ({ item }) => {
+    const thumbnail = thumbnails[item.id];
+    const hasFile = !!item.file;
+
+    return (
+      <TouchableOpacity
+        onPress={() => openPreview(item)}
+        style={styles.cardContainer}
+        activeOpacity={0.7}
+      >
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.iconContainer}>
+              {hasFile ? (
+                thumbnail?.type === "image" ? (
+                  <Image
+                    source={{ uri: thumbnail.uri }}
+                    style={styles.thumbnailImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Ionicons name="document" size={24} color="#3b82f6" />
+                )
+              ) : (
+                <Ionicons name="document-text" size={24} color="#3b82f6" />
+              )}
+            </View>
+            <View style={styles.cardHeaderText}>
+              <Text style={styles.title} numberOfLines={2}>
+                {item.title}
+              </Text>
+              <View style={styles.metaContainer}>
+                <Ionicons name="time-outline" size={14} color="#6b7280" />
+                <Text style={styles.dateText}>
+                  {new Date(item.created).toLocaleDateString("en-US", {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {hasFile && (
+            <View style={styles.filePreviewContainer}>
+              <Text style={styles.filePreviewText}>
+                {thumbnail?.type === "image" ? "Image" : "PDF Document"}{" "}
+                attached
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.cardFooter}>
+            <View style={styles.tagContainer}>
+              <Text style={styles.tag}>Press Release</Text>
+            </View>
+            <View style={styles.cardActions}>
+              <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  // Updated preview modal with file handling
   const renderPreviewModal = () => (
     <Modal
       visible={previewVisible}
@@ -320,16 +480,15 @@ const News = () => {
               </TouchableOpacity>
               <Text style={styles.previewTitle}>Preview</Text>
             </View>
-            <TouchableOpacity
-              onPress={() => {
-                closePreview();
-                router.push(`/news/${previewItem.id}`);
-              }}
-              style={styles.fullViewButton}
-            >
-              <Text style={styles.fullViewButtonText}>Full View</Text>
-              <Ionicons name="arrow-forward" size={16} color="#3b82f6" />
-            </TouchableOpacity>
+            {previewItem.file && (
+              <TouchableOpacity
+                onPress={() => downloadFile(getFileUrl(previewItem))}
+                style={styles.downloadButton}
+              >
+                <Ionicons name="download-outline" size={18} color="#3b82f6" />
+                <Text style={styles.downloadButtonText}>Download</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           <ScrollView style={styles.previewContent}>
@@ -351,6 +510,31 @@ const News = () => {
               </View>
             </View>
 
+            {/* File Preview Section */}
+            {previewItem.file && (
+              <View style={styles.filePreviewSection}>
+                <Text style={styles.sectionTitle}>Attachment</Text>
+                {getFileType(getFileUrl(previewItem)) === "image" ? (
+                  <Image
+                    source={{ uri: getFileUrl(previewItem) }}
+                    style={styles.fullPreviewImage}
+                    resizeMode="contain"
+                  />
+                ) : (
+                  <View style={styles.pdfPreviewContainer}>
+                    <Ionicons name="document" size={48} color="#3b82f6" />
+                    <Text style={styles.pdfPreviewText}>PDF Document</Text>
+                    <TouchableOpacity
+                      style={styles.viewPdfButton}
+                      onPress={() => Linking.openURL(getFileUrl(previewItem))}
+                    >
+                      <Text style={styles.viewPdfButtonText}>View PDF</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            )}
+
             {previewItem.description && (
               <View style={styles.previewDescription}>
                 <Text style={styles.previewDescriptionText}>
@@ -359,7 +543,6 @@ const News = () => {
               </View>
             )}
 
-            {/* Additional fields that might be in your news items */}
             {previewItem.content && (
               <View style={styles.previewBody}>
                 <Text style={styles.previewBodyTitle}>Content</Text>
@@ -374,7 +557,9 @@ const News = () => {
 
             <View style={styles.previewFooter}>
               <Text style={styles.previewFooterText}>
-                Tap "Full View" to read the complete article
+                {previewItem.file
+                  ? "Download the file for full details"
+                  : "View full details for complete information"}
               </Text>
             </View>
           </ScrollView>
@@ -472,13 +657,18 @@ const News = () => {
     <View style={styles.container}>
       <Stack.Screen
         options={{
-          title: "Press Releases",
-          headerStyle: { backgroundColor: "#f8fafc" },
-          headerTitleStyle: { fontWeight: "600", color: "#1f2937" },
+          headerShown: false,
         }}
       />
 
-      {renderHeader()}
+      <CustomHeader
+        title="Press Releases"
+        subtitle="Check and manage your traffic violations"
+        showBackButton={true}
+        onBack={() => navigation.goBack()}
+        showLogo={false}
+      />
+
       {renderStats()}
 
       {loading && !refreshing ? (
@@ -909,6 +1099,77 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#9ca3af",
     textAlign: "center",
+  },
+  thumbnailImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 8,
+  },
+  filePreviewContainer: {
+    backgroundColor: "#f3f4f6",
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  filePreviewText: {
+    fontSize: 13,
+    color: "#4b5563",
+    marginLeft: 8,
+  },
+  filePreviewSection: {
+    marginBottom: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 12,
+  },
+  fullPreviewImage: {
+    width: "100%",
+    height: 300,
+    borderRadius: 8,
+  },
+  pdfPreviewContainer: {
+    alignItems: "center",
+    padding: 20,
+    backgroundColor: "#f3f4f6",
+    borderRadius: 8,
+  },
+  pdfPreviewText: {
+    fontSize: 14,
+    color: "#4b5563",
+    marginTop: 8,
+  },
+  viewPdfButton: {
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: "#3b82f6",
+    borderRadius: 6,
+  },
+  viewPdfButtonText: {
+    color: "white",
+    fontWeight: "500",
+  },
+  downloadButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "#eff6ff",
+    borderRadius: 6,
+  },
+  downloadButtonText: {
+    fontSize: 14,
+    color: "#3b82f6",
+    fontWeight: "500",
   },
 });
 

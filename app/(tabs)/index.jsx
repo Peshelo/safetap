@@ -230,7 +230,7 @@ const Home = () => {
   const additionalServices = [
     {
       title: "Press Releases",
-      subtitle: "Official announcements and updates",
+      subtitle: "Official announcements and updates from ZRP",
       icon: "newspaper",
       color: "#7c3aed",
       bgColor: "#f3e8ff",

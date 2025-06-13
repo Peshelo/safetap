@@ -17,10 +17,13 @@ import { useLocalSearchParams, Stack } from "expo-router";
 import pb from "../../lib/connection";
 import { Ionicons } from "@expo/vector-icons";
 import { WebView } from "react-native-webview";
+import CustomHeader from "../components/Header";
+import { useNavigation } from "@react-navigation/native";
 
 const { width, height } = Dimensions.get("window");
 
 const NewsDetails = () => {
+  const navigation = useNavigation();
   const { id } = useLocalSearchParams();
   const [article, setArticle] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -313,11 +316,25 @@ const NewsDetails = () => {
   return (
     <>
       <ScrollView style={styles.container}>
-        <Stack.Screen
+        {/* <Stack.Screen
           options={{
             title: article?.title || "Article",
             headerTitleStyle: { fontSize: 16 },
           }}
+        /> */}
+
+        <Stack.Screen
+          options={{
+            headerShown: false,
+          }}
+        />
+
+        <CustomHeader
+          title={article?.title || "Article"}
+          subtitle="Press Release Details"
+          showBackButton={true}
+          onBack={() => navigation.goBack()}
+          showLogo={false}
         />
 
         {/* Header Image */}
