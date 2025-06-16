@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { NetInfo } from "@react-native-community/netinfo";
+import NetInfo from "@react-native-community/netinfo";
 
 const useNetworkStatus = () => {
   const [isOnline, setIsOnline] = useState(true);

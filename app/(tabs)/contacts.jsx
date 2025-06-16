@@ -11,17 +11,17 @@ import {
   StatusBar,
   StyleSheet,
   Dimensions,
+  Alert,
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { FontAwesome5, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import pb from "../../lib/connection";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Stack, useRouter } from "expo-router";
-import * as Network from "expo-network";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as SecureStore from "expo-secure-store";
 import CustomHeader from "../components/Header";
 import { useNavigation } from "@react-navigation/native";
+import useNetworkStatus from "../hooks/useNetworkStatus";
 
 const { width } = Dimensions.get("window");
 
@@ -108,6 +108,10 @@ const zimbabweProvinces = {
   ],
 };
 
+const CACHE_KEY = "emergencyContacts";
+const CACHE_TIMESTAMP_KEY = "emergencyContactsTimestamp";
+const CACHE_EXPIRY_TIME = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
 const EmergencyContacts = () => {
   const navigation = useNavigation();
   const [contacts, setContacts] = useState([]);
@@ -118,61 +122,190 @@ const EmergencyContacts = () => {
   const [selectedProvince, setSelectedProvince] = useState("");
   const [selectedDistrict, setSelectedDistrict] = useState("");
   const [districts, setDistricts] = useState([]);
-  const [isOffline, setIsOffline] = useState(false);
+  const [usingCachedData, setUsingCachedData] = useState(false);
   const router = useRouter();
+
+  // Use the custom network status hook
+  const isOnline = useNetworkStatus();
 
   // Load contacts from cache or API
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        // Check network status
-        const networkState = await Network.getNetworkStateAsync();
-        setIsOffline(!networkState.isConnected);
-
-        // Try to load from cache first
-        // const cachedContacts = await SecureStore.getItemAsync('emergencyContacts');
-        const cachedContacts = await AsyncStorage.getItem("emergencyContacts");
-        if (cachedContacts) {
-          setContacts(JSON.parse(cachedContacts));
-          setFilteredContacts(JSON.parse(cachedContacts));
-        }
-
-        // Fetch fresh data if online
-        if (networkState.isConnected) {
-          await fetchContacts();
-        } else if (!cachedContacts) {
-          Alert.alert(
-            "Offline",
-            "No cached data available. Please connect to the internet to load contacts."
-          );
-        }
-      } catch (error) {
-        console.error("Error loading data:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadData();
   }, []);
 
+  // React to network status changes
+  useEffect(() => {
+    if (isOnline && contacts.length > 0) {
+      // When coming back online, try to refresh data
+      refreshDataIfNeeded();
+    }
+  }, [isOnline]);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+
+      // Always try to load from cache first
+      const cachedData = await loadFromCache();
+
+      if (cachedData) {
+        setContacts(cachedData);
+        setFilteredContacts(cachedData);
+        setUsingCachedData(true);
+      }
+
+      // If online, try to fetch fresh data
+      if (isOnline) {
+        await fetchContacts();
+      } else if (!cachedData) {
+        Alert.alert(
+          "No Internet Connection",
+          "No cached data available. Please connect to the internet to load police station contacts.",
+          [{ text: "OK" }]
+        );
+      }
+    } catch (error) {
+      console.error("Error loading data:", error);
+      Alert.alert("Error", "Failed to load contacts. Please try again.", [
+        { text: "OK" },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // const loadFromCache = async () => {
+  //   try {
+  //     const cachedContacts = await AsyncStorage.getItem(CACHE_KEY);
+  //     const cacheTimestamp = await AsyncStorage.getItem(CACHE_TIMESTAMP_KEY);
+
+  //     if (cachedContacts && cacheTimestamp) {
+  //       const timestamp = parseInt(cacheTimestamp, 10);
+  //       const now = Date.now();
+
+  //       // Check if cache is still valid (within 24 hours)
+  //       if (now - timestamp < CACHE_EXPIRY_TIME) {
+  //         return JSON.parse(cachedContacts);
+  //       } else {
+  //         // Cache is expired, but we can still use it if offline
+  //         if (!isOnline) {
+  //           return JSON.parse(cachedContacts);
+  //         }
+  //       }
+  //     }
+
+  //     return null;
+  //   } catch (error) {
+  //     console.error("Error loading from cache:", error);
+  //     return null;
+  //   }
+  // };
+
+  // const saveToCache = async (data) => {
+  //   try {
+  //     await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(data));
+  //     await AsyncStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
+  //   } catch (error) {
+  //     console.error("Error saving to cache:", error);
+  //   }
+  // };
+
+  const loadFromCache = async () => {
+    try {
+      console.log("Attempting to load from cache...");
+      const cachedContacts = await AsyncStorage.getItem(CACHE_KEY);
+      const cacheTimestamp = await AsyncStorage.getItem(CACHE_TIMESTAMP_KEY);
+
+      if (cachedContacts && cacheTimestamp) {
+        console.log("Found cached data");
+        const timestamp = parseInt(cacheTimestamp, 10);
+        const now = Date.now();
+
+        if (now - timestamp < CACHE_EXPIRY_TIME) {
+          console.log("Cache is valid");
+          return JSON.parse(cachedContacts);
+        } else {
+          console.log("Cache is expired");
+          if (!isOnline) {
+            console.log("Using expired cache because offline");
+            return JSON.parse(cachedContacts);
+          }
+        }
+      }
+
+      console.log("No valid cache available");
+      return null;
+    } catch (error) {
+      console.error("Error loading from cache:", error);
+      return null;
+    }
+  };
+
+  const saveToCache = async (data) => {
+    try {
+      console.log("Saving data to cache...");
+      await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(data));
+      await AsyncStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
+      console.log("Data saved to cache successfully");
+    } catch (error) {
+      console.error("Error saving to cache:", error);
+    }
+  };
+
   const fetchContacts = async () => {
+    if (!isOnline) {
+      return;
+    }
+
     setSyncing(true);
     try {
       const records = await pb.collection("contacts").getFullList();
       setContacts(records);
       setFilteredContacts(records);
-      await SecureStore.setItemAsync(
-        "emergencyContacts",
-        JSON.stringify(records)
-      );
-      // await AsyncStorage.setItem('emergencyContacts', JSON.stringify(records));
+      setUsingCachedData(false);
+
+      // Save to cache
+      await saveToCache(records);
     } catch (error) {
       console.error("Failed to fetch contacts:", error);
-      Alert.alert("Error", "Failed to sync contacts. Please try again.");
+      Alert.alert(
+        "Sync Error",
+        "Failed to sync contacts from server. Using cached data if available.",
+        [{ text: "OK" }]
+      );
     } finally {
       setSyncing(false);
     }
+  };
+
+  const refreshDataIfNeeded = async () => {
+    try {
+      const cacheTimestamp = await AsyncStorage.getItem(CACHE_TIMESTAMP_KEY);
+      if (cacheTimestamp) {
+        const timestamp = parseInt(cacheTimestamp, 10);
+        const now = Date.now();
+
+        // If cache is older than 1 hour, refresh automatically
+        if (now - timestamp > 60 * 60 * 1000) {
+          await fetchContacts();
+        }
+      }
+    } catch (error) {
+      console.error("Error checking cache timestamp:", error);
+    }
+  };
+
+  const handleRefresh = async () => {
+    if (!isOnline) {
+      Alert.alert(
+        "No Internet Connection",
+        "Cannot refresh data while offline. Connect to the internet and try again.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
+    await fetchContacts();
   };
 
   // Update districts when province changes
@@ -323,12 +456,27 @@ const EmergencyContacts = () => {
             )}
           </View>
 
-          {isOffline && (
+          {/* Network Status Banner */}
+          {!isOnline && (
             <View style={styles.offlineBanner}>
               <MaterialIcons name="signal-wifi-off" size={16} color="#fff" />
               <Text style={styles.offlineText}>
                 Offline Mode - Showing cached data
               </Text>
+            </View>
+          )}
+
+          {/* Cache Status Banner */}
+          {isOnline && usingCachedData && (
+            <View style={styles.cacheStatusBanner}>
+              <MaterialIcons name="cached" size={16} color="#2d3748" />
+              <Text style={styles.cacheStatusText}>Showing cached data</Text>
+              <TouchableOpacity
+                onPress={handleRefresh}
+                style={styles.refreshButton}
+              >
+                <Text style={styles.refreshButtonText}>Refresh</Text>
+              </TouchableOpacity>
             </View>
           )}
         </View>
@@ -337,6 +485,7 @@ const EmergencyContacts = () => {
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#4a6da7" />
+            <Text style={styles.loadingText}>Loading contacts...</Text>
           </View>
         ) : (
           <View style={styles.resultsContainer}>
@@ -346,11 +495,14 @@ const EmergencyContacts = () => {
                 {filteredContacts.length === 1 ? "Station" : "Stations"}
               </Text>
               {syncing && (
-                <ActivityIndicator
-                  size="small"
-                  color="#4a6da7"
-                  style={{ marginLeft: 8 }}
-                />
+                <View style={styles.syncingContainer}>
+                  <ActivityIndicator
+                    size="small"
+                    color="#4a6da7"
+                    style={{ marginLeft: 8 }}
+                  />
+                  <Text style={styles.syncingText}>Syncing...</Text>
+                </View>
               )}
             </View>
 
@@ -421,7 +573,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   picker: {
-    // height: 48,
     width: "100%",
     color: "#2d3748",
   },
@@ -438,11 +589,43 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 12,
   },
+  cacheStatusBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f7fafc",
+    padding: 8,
+    borderRadius: 4,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  cacheStatusText: {
+    color: "#2d3748",
+    marginLeft: 8,
+    fontSize: 12,
+    flex: 1,
+  },
+  refreshButton: {
+    backgroundColor: "#4a6da7",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  refreshButtonText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "500",
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: 32,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: "#718096",
   },
   resultsContainer: {
     paddingHorizontal: 16,
@@ -456,22 +639,24 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
     color: "#2d3748",
+    flex: 1,
+  },
+  syncingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  syncingText: {
+    marginLeft: 4,
+    fontSize: 12,
+    color: "#718096",
   },
   contactCard: {
     backgroundColor: "#fff",
-    // borderRadius: 8,
     padding: 16,
-    // marginBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#e2e8f0",
-
     flexDirection: "row",
     alignItems: "center",
-    // shadowColor: '#000',
-    // shadowOffset: { width: 0, height: 1 },
-    // shadowOpacity: 0.05,
-    // shadowRadius: 3,
-    // elevation: 1,
   },
   contactIcon: {
     backgroundColor: "#ebf2ff",

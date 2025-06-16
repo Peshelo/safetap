@@ -17,7 +17,8 @@ const OfflineBanner = ({ onRefresh }) => {
   useEffect(() => {
     // Subscribe to network state updates
     const unsubscribe = NetInfo.addEventListener((state) => {
-      setIsConnected(state.isConnected && state.isInternetReachable);
+      // setIsConnected(state.isConnected && state.isInternetReachable);
+      setIsConnected(false);
     });
 
     // Cleanup subscription on unmount

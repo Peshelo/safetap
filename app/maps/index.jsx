@@ -250,14 +250,14 @@ const PoliceMap = () => {
         showLogo={false}
       />
 
-      {!isOnline && <OfflineBanner />}
-
       {loading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color="#2563eb" />
           <Text style={styles.loadingText}>Loading police stations...</Text>
         </View>
       )}
+
+      {!isOnline && <OfflineBanner />}
 
       <MapView
         provider={PROVIDER_GOOGLE}
