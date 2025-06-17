@@ -21,8 +21,8 @@ import OfflineBanner from "../components/OfflineBanner";
 import useNetworkStatus from "../hooks/useNetworkStatus";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const CACHE_KEY = "POLICE_STATIONS_CACHE";
-const CACHE_EXPIRY_DAYS = 7;
+// const CACHE_KEY = "POLICE_STATIONS_CACHE";
+// const CACHE_EXPIRY_DAYS = 7;
 
 const PoliceMap = () => {
   const [policeStations, setPoliceStations] = useState([]);
@@ -103,52 +103,22 @@ const PoliceMap = () => {
         setPoliceStations(records);
 
         // Cache the fresh data with timestamp
-        await AsyncStorage.setItem(
-          CACHE_KEY,
-          JSON.stringify({
-            data: records,
-            timestamp: new Date().getTime(),
-          })
-        );
+        // await AsyncStorage.setItem(
+        //   CACHE_KEY,
+        //   JSON.stringify({
+        //     data: records,
+        //     timestamp: new Date().getTime(),
+        //   })
+        // );
 
         return; // Exit if successful
       } catch (onlineErr) {
         console.log("Online fetch failed, trying cached data...");
       }
-
-      // If online fetch fails, try to load cached data
-      const cachedData = await AsyncStorage.getItem(CACHE_KEY);
-      if (cachedData) {
-        const { data, timestamp } = JSON.parse(cachedData);
-
-        // Check if cache is expired (7 days)
-        const isCacheExpired =
-          new Date().getTime() - timestamp >
-          CACHE_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
-
-        if (!isCacheExpired) {
-          setPoliceStations(data);
-          return;
-        }
-      }
-
-      // If no cache or cache is expired, use hardcoded fallback
-      setPoliceStations([
-        {
-          id: "1",
-          name: "Central Police Station",
-          latitude: -17.8292,
-          longitude: 31.0522,
-          address: "Central Avenue, Harare",
-          phone: "+263-4-703631",
-        },
-        // ... rest of your hardcoded stations
-      ]);
+      
     } catch (err) {
       console.error("Failed to fetch police stations:", err);
-      setPoliceStations([
-        // ... your hardcoded stations
-      ]);
+      Alert.alert("Error", "Unable to fetch police stations. Please try again later.");
     } finally {
       setLoading(false);
     }
@@ -186,6 +156,7 @@ const PoliceMap = () => {
   useEffect(() => {
     // getLocation();
     fetchPoliceStations();
+    // centerOnUser();
   }, []);
 
   const onStationPress = (station) => {
@@ -203,7 +174,7 @@ const PoliceMap = () => {
               {
                 text: "Call",
                 onPress: () => {
-                  const url = `tel:${station.station_number}`;
+                  const url = `tel:+${station.station_number}`;
                   Linking.openURL(url).catch(() =>
                     Alert.alert("Error", "Could not make the call")
                   );
@@ -379,6 +350,7 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     backgroundColor: "#3b82f6",
+    // Pulse animation
     borderWidth: 3,
     borderColor: "#ffffff",
     shadowColor: "#000",

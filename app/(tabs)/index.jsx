@@ -14,7 +14,7 @@ import {
   RefreshControl,
   Dimensions,
 } from "react-native";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, use } from "react";
 import { router, Stack } from "expo-router";
 import { Ionicons, FontAwesome5, MaterialIcons } from "@expo/vector-icons";
 import pb from "../../lib/connection";
@@ -40,8 +40,9 @@ const Home = () => {
   const fetchUserPhone = async () => {
     const savedInfo = await SecureStore.getItemAsync("userEmergencyInfo");
     const userInfo = JSON.parse(savedInfo);
+    console.log("Fetched user info:", userInfo);
     if (userInfo) {
-      setUserPhone(userInfo.phoneNumber);
+      setUserPhone(userInfo?.emergencyContact);
     }
   };
 
@@ -113,9 +114,12 @@ const Home = () => {
     formData.append("priority", "red");
 
     try {
-      const emergencyContact = userPhone;
-      if (emergencyContact) {
-        formData.append("phoneNumber", emergencyContact);
+
+        const savedInfo = await SecureStore.getItemAsync("userEmergencyInfo");
+    const userInfo = JSON.parse(savedInfo);
+    console.log("Fetched user info:", userInfo);
+      if (userInfo && userInfo?.emergencyContact) {
+        formData.append("phoneNumber", userInfo?.emergencyContact);
       } else {
         Alert.alert(
           "Setup Contact to use SOS",

@@ -268,11 +268,12 @@ const EmergencyContacts = () => {
       await saveToCache(records);
     } catch (error) {
       console.error("Failed to fetch contacts:", error);
-      Alert.alert(
-        "Sync Error",
-        "Failed to sync contacts from server. Using cached data if available.",
-        [{ text: "OK" }]
-      );
+      // Alert.alert(
+      //   "Sync Error",
+      //   "Failed to sync contacts from server. Using cached data if available.",
+      //   [{ text: "OK" }]
+      // );
+      console.log("Sync Error: Using cached data due to sync error");
     } finally {
       setSyncing(false);
     }
@@ -373,7 +374,8 @@ const EmergencyContacts = () => {
       activeOpacity={0.8}
     >
       <View style={styles.contactIcon}>
-        <FontAwesome5 name="building" size={16} color="#4a6da7" />
+        {/* <FontAwesome5 name="building" size={16} color="#4a6da7" /> */}
+        <Image source={require("../../assets/images/logo.jpg")} style={{ width: 50, height: 50,objectFit:'contain' }} />
       </View>
       <View style={styles.contactInfo}>
         <Text style={styles.stationName}>{item.station}</Text>
@@ -395,7 +397,7 @@ const EmergencyContacts = () => {
 
       <CustomHeader
         title="Police Stations"
-        subtitle="Search and Discover Police Stations"
+        // subtitle="Search and Discover Police Stations"
         showBackButton={true}
         onBack={() => navigation.goBack()}
         showLogo={false}
@@ -659,8 +661,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   contactIcon: {
-    backgroundColor: "#ebf2ff",
-    padding: 10,
+    // backgroundColor: "#ebf2ff",
+    padding: 5,
     borderRadius: 8,
     marginRight: 16,
   },

@@ -61,7 +61,7 @@ const TrafficViolations = () => {
 
       // Search for violations with the specific licence number
       const records = await pb.collection("traffic_violations").getFullList({
-        filter: `licence_number ~ "${licenceNumber.trim()}"`,
+        filter: `licence_number = "${licenceNumber.trim()}"`,
         sort: "-created",
       });
 

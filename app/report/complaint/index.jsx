@@ -56,7 +56,7 @@ const Case = () => {
         "Success",
         `Your ${commentType.toLowerCase()} has been submitted successfully!`
       );
-      router.replace("/(tabs)/tackcase");
+      router.replace("/(tabs)/reports");
     } catch (error) {
       console.error("Submission error:", error);
       Alert.alert("Error", "Failed to submit. Please try again.");

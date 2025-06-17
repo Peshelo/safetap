@@ -22,7 +22,6 @@ import CustomHeader from "../components/Header";
 import { useNavigation } from "@react-navigation/native";
 import * as FileSystem from "expo-file-system";
 import * as IntentLauncher from "expo-intent-launcher";
-// import { PDFDocument } from "react-native-pdf";
 
 const { width } = Dimensions.get("window");
 
@@ -36,29 +35,12 @@ const News = () => {
   const [thumbnails, setThumbnails] = useState({});
   const [thumbnailLoading, setThumbnailLoading] = useState({});
 
-  // Filter states
   const [showFilters, setShowFilters] = useState(false);
-  const [sortBy, setSortBy] = useState("newest"); // newest, oldest, title
-  const [dateFilter, setDateFilter] = useState("all"); // all, today, week, month, year
+  const [sortBy, setSortBy] = useState("newest");
+  const [dateFilter, setDateFilter] = useState("all");
 
-  // Preview modal states
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewItem, setPreviewItem] = useState(null);
-
-  // const fetchNews = async () => {
-  //   try {
-  //     setLoading(true);
-  //     const records = await pb
-  //       .collection("news")
-  //       .getFullList({ sort: "-created" });
-  //     setNews(records);
-  //     setFilteredNews(records);
-  //   } catch (err) {
-  //     console.error("Failed to fetch news", err);
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
 
   const fetchNews = async () => {
     try {
@@ -93,7 +75,6 @@ const News = () => {
     return pb.getFileUrl(item, item.file);
   };
 
-  // Function to determine file type
   const getFileType = (url) => {
     if (!url) return null;
     const extension = url.split(".").pop().toLowerCase();
@@ -102,7 +83,6 @@ const News = () => {
     return null;
   };
 
-  // Function to download file
   const downloadFile = async (url) => {
     try {
       const fileType = getFileType(url);
@@ -133,7 +113,6 @@ const News = () => {
     }
   };
 
-  // Function to generate thumbnail for PDF or use image directly
   const generateThumbnail = async (item) => {
     if (!item.file || thumbnailLoading[item.id]) return;
 
@@ -168,7 +147,6 @@ const News = () => {
     fetchNews();
   }, []);
 
-  // Enhanced filtering with date and sorting
   useEffect(() => {
     let filtered = [...news];
     const lower = search.toLowerCase();
@@ -241,46 +219,6 @@ const News = () => {
     setPreviewVisible(false);
     setPreviewItem(null);
   };
-
-  // const renderCard = ({ item }) => (
-  //   <TouchableOpacity
-  //     onPress={() => router.push(`/press-release/${item.id}`)}
-  //     style={styles.cardContainer}
-  //     activeOpacity={0.7}
-  //   >
-  //     <View style={styles.card}>
-  //       <View style={styles.cardHeader}>
-  //         <View style={styles.iconContainer}>
-  //           <Ionicons name="document-text" size={24} color="#3b82f6" />
-  //         </View>
-  //         <View style={styles.cardHeaderText}>
-  //           <Text style={styles.title} numberOfLines={2}>
-  //             {item.title}
-  //           </Text>
-  //           <View style={styles.metaContainer}>
-  //             <Ionicons name="time-outline" size={14} color="#6b7280" />
-  //             <Text style={styles.dateText}>
-  //               {new Date(item.created).toLocaleDateString("en-US", {
-  //                 year: "numeric",
-  //                 month: "short",
-  //                 day: "numeric",
-  //               })}
-  //             </Text>
-  //           </View>
-  //         </View>
-  //       </View>
-
-  //       <View style={styles.cardFooter}>
-  //         <View style={styles.tagContainer}>
-  //           <Text style={styles.tag}>Press Release</Text>
-  //         </View>
-  //         <View style={styles.cardActions}>
-  //           <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
-  //         </View>
-  //       </View>
-  //     </View>
-  //   </TouchableOpacity>
-  // );
 
   const renderFilterModal = () => (
     <Modal
@@ -460,7 +398,6 @@ const News = () => {
     );
   };
 
-  // Updated preview modal with file handling
   const renderPreviewModal = () => (
     <Modal
       visible={previewVisible}
@@ -631,12 +568,7 @@ const News = () => {
     const hasFilters = search || sortBy !== "newest" || dateFilter !== "all";
 
     return (
-      <View style={styles.statsContainer}>
-        <Text style={styles.statsText}>
-          {hasFilters
-            ? `${filteredNews.length} of ${news.length} articles`
-            : `${news.length} press releases`}
-        </Text>
+      <View>
         {hasFilters && (
           <TouchableOpacity
             onPress={() => {
@@ -663,11 +595,13 @@ const News = () => {
 
       <CustomHeader
         title="Press Releases"
-        subtitle="Check and manage your traffic violations"
+        subtitle="Official announcements and updates from ZRP"
         showBackButton={true}
         onBack={() => navigation.goBack()}
         showLogo={false}
       />
+
+      {renderHeader()}
 
       {renderStats()}
 
