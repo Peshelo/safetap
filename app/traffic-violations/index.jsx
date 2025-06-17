@@ -17,8 +17,11 @@ import { router, Stack } from "expo-router";
 import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import pb from "../../lib/connection";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import CustomHeader from "../components/Header";
+import { useNavigation } from "@react-navigation/native";
 
 const TrafficViolations = () => {
+  const navigation = useNavigation();
   const [loading, setLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -26,6 +29,7 @@ const TrafficViolations = () => {
   const [violations, setViolations] = useState([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   // Fetch all traffic violations on component mount (optional - for admin view)
   const fetchAllViolations = async () => {
@@ -232,19 +236,37 @@ const TrafficViolations = () => {
     </View>
   );
 
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      if (hasSearched && licenceNumber.trim()) {
+        await searchViolations();
+      } else {
+        await fetchAllViolations();
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to sync data. Please try again.");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <GestureHandlerRootView className="flex-1 bg-gray-50">
       <StatusBar barStyle={"dark-content"} backgroundColor={"#fff"} />
+
       <Stack.Screen
         options={{
-          title: "Traffic Violations",
-          headerShown: true,
-          headerLeft: () => (
-            <TouchableOpacity onPress={() => router.back()}>
-              <Ionicons name="arrow-back" size={24} color="#000" />
-            </TouchableOpacity>
-          ),
+          headerShown: false, 
         }}
+      />
+
+      <CustomHeader
+        title="Traffic Violations"
+        subtitle="Check and manage your traffic violations"
+        showBackButton={true}
+        onBack={() => navigation.goBack()}
+        showLogo={false}
       />
 
       <ScrollView
