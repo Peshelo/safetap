@@ -114,10 +114,9 @@ const Home = () => {
     formData.append("priority", "red");
 
     try {
-
-        const savedInfo = await SecureStore.getItemAsync("userEmergencyInfo");
-    const userInfo = JSON.parse(savedInfo);
-    console.log("Fetched user info:", userInfo);
+      const savedInfo = await SecureStore.getItemAsync("userEmergencyInfo");
+      const userInfo = JSON.parse(savedInfo);
+      console.log("Fetched user info:", userInfo);
       if (userInfo && userInfo?.emergencyContact) {
         formData.append("phoneNumber", userInfo?.emergencyContact);
       } else {
@@ -322,7 +321,7 @@ const Home = () => {
             />
           </TouchableOpacity> */}
           <Image
-            source={require("../../assets/images/logo.jpg")}
+            source={require("../../assets/images/logo.png")}
             style={customStyles.logoImage}
           />
         </View>

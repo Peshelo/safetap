@@ -115,10 +115,12 @@ const PoliceMap = () => {
       } catch (onlineErr) {
         console.log("Online fetch failed, trying cached data...");
       }
-      
     } catch (err) {
       console.error("Failed to fetch police stations:", err);
-      Alert.alert("Error", "Unable to fetch police stations. Please try again later.");
+      Alert.alert(
+        "Error",
+        "Unable to fetch police stations. Please try again later."
+      );
     } finally {
       setLoading(false);
     }
@@ -206,7 +208,7 @@ const PoliceMap = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <Stack.Screen
         options={{
           headerShown: false,
@@ -294,7 +296,7 @@ const PoliceMap = () => {
           Tap on any police station marker for more options
         </Text>
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 

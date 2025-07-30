@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import NetInfo from "@react-native-community/netinfo";
+import NetInfo from "@react-native-community/netinfo";``
 
 const OfflineBanner = ({ onRefresh }) => {
   const [isConnected, setIsConnected] = useState(true);

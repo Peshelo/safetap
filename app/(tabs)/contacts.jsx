@@ -174,42 +174,6 @@ const EmergencyContacts = () => {
     }
   };
 
-  // const loadFromCache = async () => {
-  //   try {
-  //     const cachedContacts = await AsyncStorage.getItem(CACHE_KEY);
-  //     const cacheTimestamp = await AsyncStorage.getItem(CACHE_TIMESTAMP_KEY);
-
-  //     if (cachedContacts && cacheTimestamp) {
-  //       const timestamp = parseInt(cacheTimestamp, 10);
-  //       const now = Date.now();
-
-  //       // Check if cache is still valid (within 24 hours)
-  //       if (now - timestamp < CACHE_EXPIRY_TIME) {
-  //         return JSON.parse(cachedContacts);
-  //       } else {
-  //         // Cache is expired, but we can still use it if offline
-  //         if (!isOnline) {
-  //           return JSON.parse(cachedContacts);
-  //         }
-  //       }
-  //     }
-
-  //     return null;
-  //   } catch (error) {
-  //     console.error("Error loading from cache:", error);
-  //     return null;
-  //   }
-  // };
-
-  // const saveToCache = async (data) => {
-  //   try {
-  //     await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(data));
-  //     await AsyncStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
-  //   } catch (error) {
-  //     console.error("Error saving to cache:", error);
-  //   }
-  // };
-
   const loadFromCache = async () => {
     try {
       console.log("Attempting to load from cache...");
@@ -268,12 +232,11 @@ const EmergencyContacts = () => {
       await saveToCache(records);
     } catch (error) {
       console.error("Failed to fetch contacts:", error);
-      // Alert.alert(
-      //   "Sync Error",
-      //   "Failed to sync contacts from server. Using cached data if available.",
-      //   [{ text: "OK" }]
-      // );
-      console.log("Sync Error: Using cached data due to sync error");
+      Alert.alert(
+        "Sync Error",
+        "Failed to sync contacts from server. Using cached data if available.",
+        [{ text: "OK" }]
+      );
     } finally {
       setSyncing(false);
     }
@@ -374,8 +337,7 @@ const EmergencyContacts = () => {
       activeOpacity={0.8}
     >
       <View style={styles.contactIcon}>
-        {/* <FontAwesome5 name="building" size={16} color="#4a6da7" /> */}
-        <Image source={require("../../assets/images/logo.jpg")} style={{ width: 50, height: 50,objectFit:'contain' }} />
+        <FontAwesome5 name="building" size={16} color="#4a6da7" />
       </View>
       <View style={styles.contactInfo}>
         <Text style={styles.stationName}>{item.station}</Text>
@@ -397,7 +359,7 @@ const EmergencyContacts = () => {
 
       <CustomHeader
         title="Police Stations"
-        // subtitle="Search and Discover Police Stations"
+        subtitle="Search and Discover Police Stations"
         showBackButton={true}
         onBack={() => navigation.goBack()}
         showLogo={false}
@@ -661,8 +623,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   contactIcon: {
-    // backgroundColor: "#ebf2ff",
-    padding: 5,
+    backgroundColor: "#ebf2ff",
+    padding: 10,
     borderRadius: 8,
     marginRight: 16,
   },
