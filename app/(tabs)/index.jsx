@@ -321,7 +321,7 @@ const Home = () => {
             />
           </TouchableOpacity> */}
           <Image
-            source={require("../../assets/images/logo.png")}
+            source={require("../../assets/images/logo-alternate.png")}
             style={customStyles.logoImage}
           />
         </View>

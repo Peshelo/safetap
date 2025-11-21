@@ -1,17 +1,14 @@
 import {
   View,
   Text,
-  TouchableOpacity,
   Alert,
   Linking,
   StyleSheet,
-  StatusBar,
-  SafeAreaView,
   ActivityIndicator,
 } from "react-native";
 import React, { useState, useEffect } from "react";
-import { router, Stack } from "expo-router";
-import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
+import { Stack } from "expo-router";
+import { FontAwesome5 } from "@expo/vector-icons";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 import pb from "../../lib/connection";
 import * as Location from "expo-location";
