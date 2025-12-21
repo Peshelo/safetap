@@ -174,7 +174,7 @@ const TrafficViolations = () => {
             />
           </TouchableOpacity> */}
           <Image
-            source={require("../../assets/images/logo.jpg")}
+            source={require("../../assets/images/logo.png")}
             style={customStyles.logoImage}
           />
         </View>
@@ -257,7 +257,7 @@ const TrafficViolations = () => {
 
       <Stack.Screen
         options={{
-          headerShown: false, 
+          headerShown: false,
         }}
       />
 

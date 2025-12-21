@@ -13,6 +13,7 @@ import {
   Image,
   Linking,
   Platform,
+  StatusBar,
 } from "react-native";
 import React, { useEffect, useState } from "react";
 import { Stack, router } from "expo-router";
@@ -22,6 +23,7 @@ import CustomHeader from "../components/Header";
 import { useNavigation } from "@react-navigation/native";
 import * as FileSystem from "expo-file-system";
 import * as IntentLauncher from "expo-intent-launcher";
+import NewsCard from "../components/NewsCard";
 
 const { width } = Dimensions.get("window");
 
@@ -332,71 +334,16 @@ const News = () => {
     </Modal>
   );
 
-  const renderCard = ({ item }) => {
-    const thumbnail = thumbnails[item.id];
-    const hasFile = !!item.file;
-
-    return (
-      <TouchableOpacity
-        onPress={() => openPreview(item)}
-        style={styles.cardContainer}
-        activeOpacity={0.7}
-      >
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <View style={styles.iconContainer}>
-              {hasFile ? (
-                thumbnail?.type === "image" ? (
-                  <Image
-                    source={{ uri: thumbnail.uri }}
-                    style={styles.thumbnailImage}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <Ionicons name="document" size={24} color="#3b82f6" />
-                )
-              ) : (
-                <Ionicons name="document-text" size={24} color="#3b82f6" />
-              )}
-            </View>
-            <View style={styles.cardHeaderText}>
-              <Text style={styles.title} numberOfLines={2}>
-                {item.title}
-              </Text>
-              <View style={styles.metaContainer}>
-                <Ionicons name="time-outline" size={14} color="#6b7280" />
-                <Text style={styles.dateText}>
-                  {new Date(item.created).toLocaleDateString("en-US", {
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                  })}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {hasFile && (
-            <View style={styles.filePreviewContainer}>
-              <Text style={styles.filePreviewText}>
-                {thumbnail?.type === "image" ? "Image" : "PDF Document"}{" "}
-                attached
-              </Text>
-            </View>
-          )}
-
-          <View style={styles.cardFooter}>
-            <View style={styles.tagContainer}>
-              <Text style={styles.tag}>Press Release</Text>
-            </View>
-            <View style={styles.cardActions}>
-              <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
-            </View>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  const renderCard = ({ item }) => (
+    <NewsCard
+      item={item}
+      onPress={(item) => openPreview(item)}
+      showDescription={false}
+      showTag={true}
+      compact={false}
+      showPreviewButton={false}
+    />
+  );
 
   const renderPreviewModal = () => (
     <Modal
@@ -587,6 +534,7 @@ const News = () => {
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#1e40af" />
       <Stack.Screen
         options={{
           headerShown: false,
@@ -867,7 +815,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight + 16 : 16,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#e5e7eb",
   },
@@ -943,7 +892,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight + 16 : 16,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#e5e7eb",
   },

@@ -156,9 +156,9 @@ const PoliceMap = () => {
   };
 
   useEffect(() => {
-    // getLocation();
+    getLocation();
     fetchPoliceStations();
-    // centerOnUser();
+    centerOnUser();
   }, []);
 
   const onStationPress = (station) => {
