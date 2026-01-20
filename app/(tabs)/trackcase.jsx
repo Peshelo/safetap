@@ -8,15 +8,12 @@ import {
 import React, { Component, useState } from "react";
 import pb from "../../lib/connection";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  GestureHandlerRootView,
-  TextInput,
-} from "react-native-gesture-handler";
+import { TextInput } from "react-native-gesture-handler";
 import { Stack } from "expo-router";
 import CustomHeader from "../components/Header";
 import { useNavigation } from "@react-navigation/native";
 
-export default TrackCase = () => {
+const TrackCase = () => {
   const navigation = useNavigation();
   const [caseDetails, setCaseDetails] = useState(null);
   const [caseId, setCaseId] = useState("");
@@ -57,7 +54,7 @@ export default TrackCase = () => {
         showBackButton={true}
         showLogo={false}
       />
-      <GestureHandlerRootView>
+      <View>
         <View className="bg-white rounded-2xl p-5 mb-8 shadow-sm">
           <View className="flex-row items-center mb-5">
             <View className="bg-blue-100 p-2 rounded-lg mr-4">
@@ -161,7 +158,9 @@ export default TrackCase = () => {
             </View>
           </View>
         )}
-      </GestureHandlerRootView>
+      </View>
     </View>
   );
 };
+
+export default TrackCase;

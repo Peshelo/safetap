@@ -1,10 +1,7 @@
 import { View, Text, TouchableOpacity, Image, Alert } from "react-native";
 import React from "react";
 import { Link, Stack, useRouter } from "expo-router";
-import {
-  GestureHandlerRootView,
-  ScrollView,
-} from "react-native-gesture-handler";
+import { ScrollView } from "react-native-gesture-handler";
 import {
   Ionicons,
   MaterialCommunityIcons,
@@ -65,7 +62,7 @@ const Reports = () => {
   };
 
   return (
-    <GestureHandlerRootView className="flex-1 bg-gray-50">
+    <View className="flex-1 bg-gray-50">
       <Stack.Screen
         options={{
           headerShown: false,
@@ -134,7 +131,7 @@ const Reports = () => {
           </View>
         </ScrollView>
       </View>
-    </GestureHandlerRootView>
+    </View>
   );
 };
 

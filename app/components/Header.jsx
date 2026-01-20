@@ -26,7 +26,7 @@ const CustomHeader = ({
     <View
       style={[
         styles.headerContainer,
-        { paddingTop: insets.top + (compact ? 4 : 8) },
+        { paddingTop: insets.top + (compact ? 8 : 16) },
       ]}
     >
       <StatusBar barStyle="light-content" backgroundColor="#1e40af" />
@@ -40,7 +40,7 @@ const CustomHeader = ({
             >
               <Ionicons
                 name="arrow-back"
-                size={compact ? 22 : 24}
+                size={compact ? 26 : 28}
                 color="#fff"
               />
             </TouchableOpacity>
@@ -83,35 +83,29 @@ const CustomHeader = ({
 };
 
 const styles = StyleSheet.create({
-  // Main container - total height: ~80-90px
+  // Main container - total height: ~120-130px (increased from 80-90px)
   headerContainer: {
     backgroundColor: "#1e40af",
-    paddingBottom: 12, // Reduced from 16
-    paddingHorizontal: 16,
-    // Total height calculation:
-    // iOS: insets.top (44) + 8 + contentHeight (44) + 12 = ~104px
-    // With compact: insets.top (44) + 4 + contentHeight (36) + 8 = ~92px
-    // Android: varies, but similar proportions
+    paddingTop: 20,
+    paddingBottom: 18, // ⬅️ more vertical space
+    paddingHorizontal: 20,
     minHeight: Platform.select({
-      ios: 44, // Content height
-      android: 56,
+      ios: 140, // ⬅️ BIG difference
+      android: 120,
     }),
-    justifyContent: "center",
+    justifyContent: "flex-end", // ⬅️ pushes content down
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 }, // Reduced shadow
-    shadowOpacity: 0.08, // Lighter shadow
-    shadowRadius: 2,
-    elevation: 2,
-    borderBottomWidth: 0.5,
-    borderBottomColor: "rgba(255, 255, 255, 0.1)",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 6,
   },
 
   // Content layout
   headerContent: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-end", // ⬅️ bottom-aligned like the screenshot
     justifyContent: "space-between",
-    flex: 1,
   },
 
   // Left side
@@ -120,15 +114,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flex: 1,
     minHeight: Platform.select({
-      ios: 44,
-      android: 56,
+      ios: 56, // Increased from 44
+      android: 64, // Increased from 56
     }),
   },
 
   backButton: {
-    marginRight: 8, // Reduced from 12
-    width: 40, // Standard touch target
-    height: 40,
+    marginRight: 16, // Increased from 8
+    width: 48, // Increased from 40
+    height: 48,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -137,27 +131,27 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     minHeight: Platform.select({
-      ios: 44,
-      android: 56,
+      ios: 56,
+      android: 64,
     }),
   },
 
-  // Title styles - modern sizing
+  // Title styles - larger sizing
   headerTitle: {
     fontSize: Platform.select({
-      ios: 17, // iOS standard
-      android: 18, // Slightly larger for Android
-      default: 17,
+      ios: 28, // Increased from 17
+      android: 26, // Increased from 18
+      default: 22,
     }),
     fontWeight: Platform.select({
-      ios: "600", // Semibold on iOS
-      android: "700", // Bold on Android
-      default: "600",
+      ios: "700", // Increased from 600
+      android: "800", // Increased from 700
+      default: "700",
     }),
     color: "#fff",
-    lineHeight: 22,
+    lineHeight: 36, // Increased from 22
     letterSpacing: Platform.select({
-      ios: -0.41, // iOS standard tracking
+      ios: -0.41,
       android: 0,
       default: 0,
     }),
@@ -165,24 +159,24 @@ const styles = StyleSheet.create({
 
   headerTitleCompact: {
     fontSize: Platform.select({
-      ios: 16,
-      android: 17,
-      default: 16,
+      ios: 20, // Increased from 16
+      android: 22, // Increased from 17
+      default: 20,
     }),
-    lineHeight: 20,
+    lineHeight: 26, // Increased from 20
   },
 
-  // Subtitle styles
+  // Subtitle styles - larger
   headerSubtitle: {
     fontSize: Platform.select({
-      ios: 12,
-      android: 13,
-      default: 12,
+      ios: 16, // Increased from 12
+      android: 17, // Increased from 13
+      default: 16,
     }),
     color: "#dbeafe",
-    opacity: 0.85,
-    marginTop: 2,
-    lineHeight: 16,
+    opacity: 0.9,
+    marginTop: 6, // Increased from 2
+    lineHeight: 20, // Increased from 16
     letterSpacing: Platform.select({
       ios: -0.24,
       android: 0,
@@ -191,9 +185,9 @@ const styles = StyleSheet.create({
   },
 
   headerSubtitleCompact: {
-    fontSize: 11,
-    lineHeight: 14,
-    marginTop: 1,
+    fontSize: 14, // Increased from 11
+    lineHeight: 18, // Increased from 14
+    marginTop: 4, // Increased from 1
   },
 
   // Right side
@@ -202,31 +196,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "flex-end",
     minHeight: Platform.select({
-      ios: 44,
-      android: 56,
+      ios: 56,
+      android: 64,
     }),
   },
 
-  // Logo
+  // Logo - larger
   logoImage: {
-    width: 36, // Reduced from 40
-    height: 36,
-    borderRadius: 6, // Slightly smaller radius
+    width: 48, // Increased from 36
+    height: 48,
+    borderRadius: 8, // Increased from 6
   },
 
   logoImageCompact: {
-    width: 32,
-    height: 32,
+    width: 42, // Increased from 32
+    height: 42,
   },
 
   rightComponentCompact: {
-    transform: [{ scale: 0.9 }],
+    transform: [{ scale: 0.95 }],
   },
 });
 
 // Export additional presets for common use cases
 export const HeaderPresets = {
-  // Standard header with subtitle
+  // Standard header with subtitle (larger)
   standard: {
     compact: false,
   },
@@ -242,6 +236,10 @@ export const HeaderPresets = {
   tab: {
     compact: true,
     showLogo: true,
+  },
+  // Extra large header for important pages
+  large: {
+    compact: false,
   },
 };
 

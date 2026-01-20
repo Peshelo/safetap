@@ -16,7 +16,6 @@ import React, { useState, useEffect } from "react";
 import { router, Stack } from "expo-router";
 import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import pb from "../../lib/connection";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
 import CustomHeader from "../components/Header";
 import { useNavigation } from "@react-navigation/native";
 
@@ -252,7 +251,7 @@ const TrafficViolations = () => {
   };
 
   return (
-    <GestureHandlerRootView className="flex-1 bg-gray-50">
+    <View className="flex-1 bg-gray-50">
       <StatusBar barStyle={"dark-content"} backgroundColor={"#fff"} />
 
       <Stack.Screen
@@ -400,7 +399,7 @@ const TrafficViolations = () => {
           </View>
         </View>
       </ScrollView>
-    </GestureHandlerRootView>
+    </View>
   );
 };
 

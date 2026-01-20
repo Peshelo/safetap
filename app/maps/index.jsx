@@ -102,6 +102,8 @@ const PoliceMap = () => {
         const records = await pb.collection("contacts").getFullList({});
         setPoliceStations(records);
 
+        console.log(records);
+
         // Cache the fresh data with timestamp
         // await AsyncStorage.setItem(
         //   CACHE_KEY,
@@ -125,7 +127,6 @@ const PoliceMap = () => {
       setLoading(false);
     }
   };
-
   const getLocation = async () => {
     try {
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -134,32 +135,24 @@ const PoliceMap = () => {
           "Permission Denied",
           "Location permission helps us show nearby police stations."
         );
+        // Don't return - still load the map with default location
+        setLoading(false);
         return;
       }
-
-      let location = await Location.getCurrentPositionAsync({});
-      const { latitude, longitude } = location.coords;
-
-      setUserCoords({ latitude, longitude });
-
-      // Update map region to center on user location
-      setMapRegion({
-        latitude,
-        longitude,
-        latitudeDelta: 0.0922,
-        longitudeDelta: 0.0421,
-      });
+      // ... rest of your code
     } catch (error) {
       console.error("Error getting location:", error);
-      Alert.alert("Error", "Unable to get your current location");
+      setLoading(false); // Add this
     }
   };
 
   useEffect(() => {
-    getLocation();
-    fetchPoliceStations();
-    centerOnUser();
-  }, []);
+    const initialize = async () => {
+      await getLocation();
+      await fetchPoliceStations();
+    };
+    initialize();
+  }, []); // Remove centerOnUser() from here
 
   const onStationPress = (station) => {
     Alert.alert(

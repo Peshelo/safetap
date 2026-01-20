@@ -9,7 +9,6 @@ import {
   StyleSheet,
   Image,
   StatusBar,
-  FlatList,
   RefreshControl,
   Dimensions,
   Platform,
@@ -20,9 +19,9 @@ import { Ionicons, FontAwesome5, MaterialIcons } from "@expo/vector-icons";
 import pb from "../../lib/connection";
 import * as Location from "expo-location";
 import * as SecureStore from "expo-secure-store";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
 import CustomHeader from "../components/Header";
 import NewsCard from "../components/NewsCard";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const { width, height } = Dimensions.get("window");
 
@@ -178,7 +177,7 @@ const Home = () => {
   );
 
   return (
-    <GestureHandlerRootView className="flex-1 bg-gray-50">
+    <View className="flex-1 bg-gray-50">
       <StatusBar barStyle="light-content" backgroundColor="#1e40af" />
       <Stack.Screen
         options={{
@@ -307,19 +306,21 @@ const Home = () => {
                   <Ionicons name="chevron-forward" size={16} color="#2563eb" />
                 </TouchableOpacity>
               </View>
-              <FlatList
-                data={newsArticles.slice(0, 3)}
-                renderItem={renderNewsItem}
-                keyExtractor={(item) => item.id}
-                scrollEnabled={false}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 8 }}
-              />
+              {newsArticles.slice(0, 3).map((item) => (
+                <NewsCard
+                  key={item.id}
+                  item={item}
+                  onPress={() => router.push(`/press-release/${item.id}`)}
+                  showDescription
+                  showPreviewButton
+                  cardStyle={{ marginBottom: 12 }}
+                />
+              ))}
             </View>
           )}
         </View>
       </ScrollView>
-    </GestureHandlerRootView>
+    </View>
   );
 };
 
@@ -332,8 +333,7 @@ const customStyles = StyleSheet.create({
     gap: 12,
   },
   serviceCardWrapper: {
-    width: width < 375 ? "100%" : (width - 40 - 12) / 2, // Full width on small screens, half on larger
-    minWidth: 150,
+    width: "48%",
   },
   serviceCard: {
     backgroundColor: "white",

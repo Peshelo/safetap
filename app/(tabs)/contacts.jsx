@@ -16,7 +16,6 @@ import {
 import { Picker } from "@react-native-picker/picker";
 import { FontAwesome5, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import pb from "../../lib/connection";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Stack, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import CustomHeader from "../components/Header";
@@ -350,7 +349,7 @@ const EmergencyContacts = () => {
   );
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen
         options={{
           headerShown: false,
@@ -490,7 +489,7 @@ const EmergencyContacts = () => {
           </View>
         )}
       </ScrollView>
-    </GestureHandlerRootView>
+    </View>
   );
 };
 

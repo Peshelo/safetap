@@ -33,6 +33,13 @@ const NewsDetails = () => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [attachments, setAttachments] = useState([]);
 
+  const truncateTitle = (title, maxLength = 30) => {
+    if (!title) return "Article";
+    return title.length > maxLength
+      ? title.substring(0, maxLength) + "..."
+      : title;
+  };
+
   const fetchArticle = async () => {
     try {
       const record = await pb.collection("news").getOne(id);
@@ -330,7 +337,7 @@ const NewsDetails = () => {
         />
 
         <CustomHeader
-          title={article?.title || "Article"}
+          title={truncateTitle(article?.title)}
           subtitle="Press Release Details"
           showBackButton={true}
           onBack={() => navigation.goBack()}
