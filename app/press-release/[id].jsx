@@ -33,17 +33,22 @@ const NewsDetails = () => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [attachments, setAttachments] = useState([]);
 
+  const truncateTitle = (title, maxLength = 30) => {
+    if (!title) return "Article";
+    return title.length > maxLength
+      ? title.substring(0, maxLength) + "..."
+      : title;
+  };
+
   const fetchArticle = async () => {
     try {
       const record = await pb.collection("news").getOne(id);
       setArticle(record);
 
-      // Process attachments (assuming files are stored in a field called 'attachments' or similar)
+      // Process attachments
       const processedAttachments = [];
 
-      // Check for image field
-
-      // Check for document/PDF field (adjust field name as needed)
+      // Check for file field
       if (record.file) {
         const docUrl = pb.files.getURL(record, record.file);
         const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(record.file);
@@ -119,81 +124,6 @@ const NewsDetails = () => {
         onPress: () => openExternalPdf(url),
       },
     ]);
-  };
-
-  const renderAttachment = (attachment, index) => {
-    switch (attachment.type) {
-      case "image":
-        return (
-          <TouchableOpacity
-            key={index}
-            onPress={() => openImageViewer(attachment.url)}
-            style={styles.imageContainer}
-          >
-            <Image
-              source={{ uri: attachment.url }}
-              style={styles.articleImage}
-              resizeMode="cover"
-            />
-            <View style={styles.imageOverlay}>
-              <Ionicons name="expand-outline" size={24} color="white" />
-            </View>
-          </TouchableOpacity>
-        );
-
-      case "pdf":
-        return (
-          <View key={index} style={styles.attachmentCard}>
-            <View style={styles.attachmentInfo}>
-              <View style={styles.pdfIconContainer}>
-                <Ionicons name="document-text" size={32} color="#dc2626" />
-              </View>
-              <View style={styles.attachmentDetails}>
-                <Text style={styles.attachmentName}>{attachment.filename}</Text>
-                <Text style={styles.attachmentType}>PDF Document</Text>
-              </View>
-            </View>
-            <View style={styles.attachmentActions}>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => setPdfViewerVisible(true)}
-              >
-                <Ionicons name="eye-outline" size={18} color="#3b82f6" />
-                <Text style={styles.actionButtonText}>View</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() =>
-                  downloadFile(attachment.url, attachment.filename)
-                }
-              >
-                <Ionicons name="download-outline" size={18} color="#3b82f6" />
-                <Text style={styles.actionButtonText}>Open</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        );
-
-      default:
-        return (
-          <TouchableOpacity
-            key={index}
-            style={styles.attachmentCard}
-            onPress={() => downloadFile(attachment.url, attachment.filename)}
-          >
-            <View style={styles.attachmentInfo}>
-              <View style={styles.fileIconContainer}>
-                <Ionicons name="document-outline" size={32} color="#6b7280" />
-              </View>
-              <View style={styles.attachmentDetails}>
-                <Text style={styles.attachmentName}>{attachment.filename}</Text>
-                <Text style={styles.attachmentType}>Document</Text>
-              </View>
-            </View>
-            <Ionicons name="download-outline" size={20} color="#6b7280" />
-          </TouchableOpacity>
-        );
-    }
   };
 
   const renderImageViewer = () => (
@@ -314,50 +244,25 @@ const NewsDetails = () => {
   }
 
   return (
-    <>
-      <ScrollView style={styles.container}>
-        {/* <Stack.Screen
-          options={{
-            title: article?.title || "Article",
-            headerTitleStyle: { fontSize: 16 },
-          }}
-        /> */}
+    <View style={styles.container}>
+      <Stack.Screen
+        options={{
+          headerShown: false,
+        }}
+      />
 
-        <Stack.Screen
-          options={{
-            headerShown: false,
-          }}
-        />
+      <CustomHeader
+        title={truncateTitle(article?.title)}
+        subtitle="Press Release Details"
+        showBackButton={true}
+        onBack={() => navigation.goBack()}
+        showLogo={false}
+      />
 
-        <CustomHeader
-          title={article?.title || "Article"}
-          subtitle="Press Release Details"
-          showBackButton={true}
-          onBack={() => navigation.goBack()}
-          showLogo={false}
-        />
-
-        {/* Header Image */}
-        {images.length > 0 && (
-          <TouchableOpacity
-            onPress={() => openImageViewer(images[0].url)}
-            style={styles.headerImageContainer}
-          >
-            <Image
-              source={{ uri: images[0].url }}
-              style={styles.headerImage}
-              resizeMode="cover"
-            />
-            <View style={styles.headerImageOverlay}>
-              <Ionicons name="expand-outline" size={24} color="white" />
-            </View>
-          </TouchableOpacity>
-        )}
-
-        <View style={styles.contentContainer}>
-          {/* Article Header */}
+      <ScrollView style={styles.scrollContent}>
+        {/* Article Header */}
+        <View style={styles.articleHeader}>
           <Text style={styles.articleTitle}>{article.title}</Text>
-
           <View style={styles.metaContainer}>
             <Ionicons name="time-outline" size={16} color="#6b7280" />
             <Text style={styles.dateText}>
@@ -370,73 +275,113 @@ const NewsDetails = () => {
               })}
             </Text>
           </View>
+        </View>
 
-          {/* Article Content */}
-          <View style={styles.contentSection}>
-            {/* <Text style={styles.articleContent}>
-              {article.description?.replace(/<[^>]*>/g, "") ||
-                "No content available."}
-            </Text> */}
-
-            {article.content && (
-              <Text style={styles.articleBody}>
-                {article.content.replace(/<[^>]*>/g, "")}
-              </Text>
-            )}
-          </View>
-
-          {/* Additional Images */}
-          {images.length > 1 && (
-            <View style={styles.gallerySection}>
-              <Text style={styles.sectionTitle}>Images</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View style={styles.galleryContainer}>
-                  {images.slice(1).map((attachment, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      onPress={() => openImageViewer(attachment.url)}
-                      style={styles.galleryItem}
-                    >
-                      <Image
-                        source={{ uri: attachment.url }}
-                        style={styles.galleryImage}
-                        resizeMode="cover"
-                      />
-                    </TouchableOpacity>
-                  ))}
+        {/* File Preview Section - Similar to News preview */}
+        {attachments.length > 0 && (
+          <View style={styles.filePreviewSection}>
+            <Text style={styles.sectionTitle}>Attachments</Text>
+            {images.map((img, index) => (
+              <TouchableOpacity
+                key={`image-${index}`}
+                onPress={() => openImageViewer(img.url)}
+                style={styles.imagePreviewContainer}
+              >
+                <Image
+                  source={{ uri: img.url }}
+                  style={styles.fullPreviewImage}
+                  resizeMode="contain"
+                />
+                <View style={styles.imageExpandIcon}>
+                  <Ionicons name="expand-outline" size={20} color="white" />
                 </View>
-              </ScrollView>
-            </View>
-          )}
+              </TouchableOpacity>
+            ))}
 
-          {/* Documents Section */}
-          {documents.length > 0 && (
-            <View style={styles.documentsSection}>
-              <Text style={styles.sectionTitle}>Attachments</Text>
-              {documents.map((attachment, index) =>
-                renderAttachment(attachment, index)
-              )}
-            </View>
-          )}
+            {documents.map((doc, index) => (
+              <View key={`doc-${index}`} style={styles.pdfPreviewContainer}>
+                <Ionicons name="document" size={48} color="#3b82f6" />
+                <Text style={styles.pdfPreviewText}>{doc.filename}</Text>
+                <Text style={styles.pdfPreviewSubtext}>PDF Document</Text>
+                <View style={styles.pdfActions}>
+                  <TouchableOpacity
+                    style={styles.viewPdfButton}
+                    onPress={() => setPdfViewerVisible(true)}
+                  >
+                    <Ionicons name="eye-outline" size={18} color="white" />
+                    <Text style={styles.viewPdfButtonText}>View PDF</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.downloadPdfButton}
+                    onPress={() => openExternalPdf(doc.url)}
+                  >
+                    <Ionicons
+                      name="download-outline"
+                      size={18}
+                      color="#3b82f6"
+                    />
+                    <Text style={styles.downloadPdfButtonText}>Download</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Description Section */}
+        {article.description && (
+          <View style={styles.descriptionSection}>
+            <Text style={styles.sectionTitle}>Description</Text>
+            <Text style={styles.descriptionText}>
+              {article.description.replace(/<[^>]*>/g, "")}
+            </Text>
+          </View>
+        )}
+
+        {/* Content Section */}
+        {article.content && (
+          <View style={styles.contentSection}>
+            <Text style={styles.sectionTitle}>Full Content</Text>
+            <Text style={styles.contentText}>
+              {article.content.replace(/<[^>]*>/g, "")}
+            </Text>
+          </View>
+        )}
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <View style={styles.footerDivider} />
+          <Text style={styles.footerText}>
+            Published on{" "}
+            {new Date(article.created).toLocaleDateString("en-US", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+          </Text>
         </View>
       </ScrollView>
 
       {renderImageViewer()}
       {renderPdfViewer()}
-    </>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#f8fafc",
+  },
+  scrollContent: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     gap: 12,
+    backgroundColor: "#f8fafc",
   },
   loadingText: {
     fontSize: 14,
@@ -448,6 +393,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 32,
     gap: 16,
+    backgroundColor: "#f8fafc",
   },
   errorText: {
     fontSize: 16,
@@ -464,27 +410,17 @@ const styles = StyleSheet.create({
     color: "white",
     fontWeight: "500",
   },
-  headerImageContainer: {
-    position: "relative",
-  },
-  headerImage: {
-    width: width,
-    height: 250,
-  },
-  headerImageOverlay: {
-    position: "absolute",
-    top: 16,
-    right: 16,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    borderRadius: 20,
-    padding: 8,
-  },
-  contentContainer: {
-    padding: 20,
+  articleHeader: {
+    backgroundColor: "#fff",
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
   },
   articleTitle: {
     fontSize: 24,
-    fontWeight: "bold",
+    fontWeight: "700",
     color: "#111827",
     lineHeight: 32,
     marginBottom: 12,
@@ -493,122 +429,141 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    marginBottom: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
   },
   dateText: {
     fontSize: 14,
     color: "#6b7280",
   },
-  contentSection: {
-    marginBottom: 24,
-  },
-  articleContent: {
-    fontSize: 16,
-    color: "#374151",
-    lineHeight: 24,
-    marginBottom: 16,
-  },
-  articleBody: {
-    fontSize: 15,
-    color: "#4b5563",
-    lineHeight: 22,
+  filePreviewSection: {
+    backgroundColor: "#fff",
+    marginTop: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#111827",
-    marginBottom: 12,
-  },
-  gallerySection: {
-    marginBottom: 24,
-  },
-  galleryContainer: {
-    flexDirection: "row",
-    gap: 12,
-    paddingRight: 20,
-  },
-  galleryItem: {
-    borderRadius: 8,
-    overflow: "hidden",
-  },
-  galleryImage: {
-    width: 120,
-    height: 120,
-  },
-  documentsSection: {
-    marginBottom: 24,
-  },
-  attachmentCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#f8fafc",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  attachmentInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  pdfIconContainer: {
-    marginRight: 12,
-  },
-  fileIconContainer: {
-    marginRight: 12,
-  },
-  attachmentDetails: {
-    flex: 1,
-  },
-  attachmentName: {
-    fontSize: 14,
-    fontWeight: "500",
     color: "#374151",
-    marginBottom: 2,
+    marginBottom: 16,
   },
-  attachmentType: {
-    fontSize: 12,
-    color: "#6b7280",
-  },
-  attachmentActions: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  actionButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-  },
-  actionButtonText: {
-    fontSize: 12,
-    color: "#3b82f6",
-    fontWeight: "500",
-  },
-  imageContainer: {
+  imagePreviewContainer: {
     position: "relative",
     marginBottom: 16,
     borderRadius: 12,
     overflow: "hidden",
+    backgroundColor: "#f3f4f6",
   },
-  articleImage: {
+  fullPreviewImage: {
     width: "100%",
-    height: 200,
+    height: 300,
+    borderRadius: 12,
   },
-  imageOverlay: {
+  imageExpandIcon: {
     position: "absolute",
-    top: 8,
-    right: 8,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    borderRadius: 16,
-    padding: 6,
+    top: 12,
+    right: 12,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    borderRadius: 20,
+    padding: 8,
+  },
+  pdfPreviewContainer: {
+    alignItems: "center",
+    padding: 24,
+    backgroundColor: "#f9fafb",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    marginBottom: 16,
+  },
+  pdfPreviewText: {
+    fontSize: 16,
+    color: "#374151",
+    marginTop: 12,
+    fontWeight: "500",
+    textAlign: "center",
+  },
+  pdfPreviewSubtext: {
+    fontSize: 14,
+    color: "#6b7280",
+    marginTop: 4,
+  },
+  pdfActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 16,
+  },
+  viewPdfButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: "#3b82f6",
+    borderRadius: 8,
+  },
+  viewPdfButtonText: {
+    color: "white",
+    fontWeight: "500",
+    fontSize: 14,
+  },
+  downloadPdfButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#3b82f6",
+  },
+  downloadPdfButtonText: {
+    color: "#3b82f6",
+    fontWeight: "500",
+    fontSize: 14,
+  },
+  descriptionSection: {
+    backgroundColor: "#fff",
+    marginTop: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  descriptionText: {
+    fontSize: 16,
+    color: "#374151",
+    lineHeight: 24,
+  },
+  contentSection: {
+    backgroundColor: "#fff",
+    marginTop: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+  },
+  contentText: {
+    fontSize: 15,
+    color: "#4b5563",
+    lineHeight: 22,
+  },
+  footer: {
+    backgroundColor: "#fff",
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
+    marginTop: 8,
+  },
+  footerDivider: {
+    height: 1,
+    backgroundColor: "#f1f5f9",
+    marginBottom: 16,
+  },
+  footerText: {
+    fontSize: 13,
+    color: "#9ca3af",
+    textAlign: "center",
   },
   // Modal Styles
   imageViewerContainer: {

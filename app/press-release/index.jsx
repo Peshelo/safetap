@@ -72,7 +72,7 @@ const News = () => {
 
   const getFileUrl = (item) => {
     if (!item.file) return null;
-    return pb.getFileUrl(item, item.file);
+    return pb.files.getURL(item, item.file);
   };
 
   const getFileType = (url) => {
