@@ -3,8 +3,10 @@ import React from "react";
 import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
+import '../global.css';
 
-const RootLayout = () => {
+
+export default function RootLayout (){
   const insets = useSafeAreaInsets();
 
   return (
@@ -98,7 +100,7 @@ const RootLayout = () => {
           ),
         }}
       /> */}
-      <Tabs.Screen
+      {/* <Tabs.Screen
         name="trackcase"
         options={{
           title: "Track Case",
@@ -110,7 +112,7 @@ const RootLayout = () => {
             />
           ),
         }}
-      />
+      /> */}
       <Tabs.Screen
         name="reports"
         options={{
@@ -142,4 +144,4 @@ const RootLayout = () => {
   );
 };
 
-export default RootLayout;
+

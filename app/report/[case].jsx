@@ -9,6 +9,7 @@ import {
   Alert,
   Image,
   StyleSheet,
+  StatusBar,
 } from "react-native";
 import { FontAwesome5, Ionicons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
@@ -19,6 +20,7 @@ import * as SecureStore from 'expo-secure-store';
 import pb from "../../lib/connection";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import CustomHeader from "../components/Header";
 
 const priorities = [
   { label: "Low", value: "green" },
@@ -156,7 +158,9 @@ const Case = () => {
   const copyToClipboard = async () => {
     await Clipboard.setStringAsync(caseId);
     Alert.alert("Copied!", "Case ID has been copied to your clipboard.");
-    router.replace("/(tabs)/trackcase");
+    // router.replace("/(tabs)/trackcase");
+        router.replace("/(tabs)/reports");
+
   };
 
   const handleInputChange = (field, value) => {
@@ -200,11 +204,34 @@ const Case = () => {
   }
 
   return (
+      <View style={{ flex: 1, backgroundColor: "#1e40af" }}>
+    <StatusBar barStyle="light-content" backgroundColor="#1e40af" />
+
+    <CustomHeader
+      title="ZRP SafeTap"
+      subtitle={`Report ${params?.case}`}
+      showBackButton={true}
+      showLogo={true}
+      // onBackPress={() => router.back()}
+    />
+
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       <Stack.Screen options={{ 
         title: `Report ${params?.case}`,
-        headerTitleStyle: styles.headerTitle
+        headerTitleStyle: styles.headerTitle,
+        headerTitle:"JEs"
+
       }} />
+            <Stack.Screen
+             
+            />
+      
+            {/* <CustomHeader
+              title="ZRP SafeTap"
+              subtitle="Zimbabwe Republic Police"
+              showBackButton={false}
+              showLogo={true}
+            /> */}
       
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Emergency Details</Text>
@@ -286,6 +313,7 @@ const Case = () => {
         </TouchableOpacity>
       </View>
     </ScrollView>
+    </View>
   );
 };
 

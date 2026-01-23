@@ -20,7 +20,7 @@ import pb from "../../lib/connection";
 import { Ionicons } from "@expo/vector-icons";
 import CustomHeader from "../components/Header";
 import { useNavigation } from "@react-navigation/native";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as IntentLauncher from "expo-intent-launcher";
 
 const { width } = Dimensions.get("window");
