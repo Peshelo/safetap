@@ -7,7 +7,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import React from "react";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import pb from "../../lib/connection";
 
 const NewsCard = ({
@@ -19,6 +19,8 @@ const NewsCard = ({
   cardStyle = {},
   compact = false,
   showPreviewButton = false,
+  showImage = true,
+  showDate = true,
 }) => {
   const getFileUrl = (item) => {
     if (!item.file) return null;
@@ -28,7 +30,7 @@ const NewsCard = ({
   const getFileType = (url) => {
     if (!url) return null;
     const extension = url.split(".").pop().toLowerCase();
-    if (["jpg", "jpeg", "png", "gif"].includes(extension)) return "image";
+    if (["jpg", "jpeg", "png", "gif", "webp"].includes(extension)) return "image";
     if (extension === "pdf") return "pdf";
     return null;
   };
@@ -38,334 +40,310 @@ const NewsCard = ({
   const hasFile = !!item.file;
 
   const getHumanFriendlyDate = (dateString) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now - date);
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
-    const diffMinutes = Math.floor(diffTime / (1000 * 60));
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffTime = Math.abs(now - date);
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
+      const diffMinutes = Math.floor(diffTime / (1000 * 60));
 
-    if (diffMinutes < 1) {
-      return "Just now";
-    } else if (diffMinutes < 60) {
-      return `${diffMinutes} minute${diffMinutes > 1 ? "s" : ""} ago`;
-    } else if (diffHours < 24) {
-      if (date.getDate() === now.getDate()) {
-        return "Today";
-      } else {
-        return "Yesterday";
-      }
-    } else if (diffDays === 1) {
-      return "Yesterday";
-    } else if (diffDays < 7) {
-      return `${diffDays} days ago`;
-    } else if (diffDays < 30) {
-      const weeks = Math.floor(diffDays / 7);
-      return `${weeks} week${weeks > 1 ? "s" : ""} ago`;
-    } else {
+      if (diffMinutes < 1) return "Just now";
+      if (diffMinutes < 60) return `${diffMinutes}m ago`;
+      if (diffHours < 24) return `${diffHours}h ago`;
+      if (diffDays < 7) return `${diffDays}d ago`;
+      if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+      
       return date.toLocaleDateString("en-US", {
-        year: "numeric",
         month: "short",
         day: "numeric",
       });
+    } catch (error) {
+      return "Recently";
     }
   };
 
+  const formatDescription = (text) => {
+    if (!text) return "";
+    // Remove HTML tags and trim
+    const cleanText = text.replace(/<[^>]*>/g, "").trim();
+    // Limit to 100 characters for preview
+    if (cleanText.length > 100) {
+      return cleanText.substring(0, 100) + "...";
+    }
+    return cleanText;
+  };
+
+  // If compact mode is enabled
   if (compact) {
     return (
       <TouchableOpacity
         onPress={() => onPress?.(item)}
-        style={[styles.compactCardContainer, cardStyle]}
+        style={[styles.compactCard, cardStyle]}
         activeOpacity={0.7}
       >
-        <View style={styles.compactCard}>
-          <View style={styles.compactCardHeader}>
-            <View style={styles.compactIconContainer}>
-              {hasFile ? (
-                fileType === "image" ? (
-                  <Image
-                    source={{ uri: fileUrl }}
-                    style={styles.compactThumbnail}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <Ionicons name="document" size={16} color="#3b82f6" />
-                )
-              ) : (
-                <Ionicons name="document-text" size={16} color="#3b82f6" />
-              )}
+        {hasFile && fileType === "image" && showImage && (
+          <Image
+            source={{ uri: fileUrl }}
+            style={styles.compactImage}
+            resizeMode="cover"
+          />
+        )}
+        <View style={styles.compactContent}>
+          {showTag && (
+            <View style={styles.tagContainer}>
+              <Text style={styles.tagText}>NEWS</Text>
             </View>
-            <View style={styles.compactCardContent}>
-              <Text style={styles.compactTitle} numberOfLines={2}>
-                {item.title}
-              </Text>
-              <View style={styles.compactMeta}>
-                <Ionicons name="time-outline" size={12} color="#6b7280" />
-                <Text style={styles.compactDate}>
+          )}
+          <Text style={styles.compactTitle} numberOfLines={2}>
+            {item.title}
+          </Text>
+          {showDate && (
+            <View style={styles.metaRow}>
+              <View style={styles.timeContainer}>
+                <Ionicons name="time-outline" size={12} color="#6B7280" />
+                <Text style={styles.metaText}>
                   {getHumanFriendlyDate(item.created)}
                 </Text>
               </View>
+              {item.description && (
+                <Text style={styles.previewText} numberOfLines={1}>
+                  {formatDescription(item.description)}
+                </Text>
+              )}
             </View>
-            <Ionicons name="chevron-forward" size={14} color="#9ca3af" />
-          </View>
+          )}
         </View>
       </TouchableOpacity>
     );
   }
 
+  // Standard article card for homepage
   return (
     <TouchableOpacity
       onPress={() => onPress?.(item)}
-      style={[styles.cardContainer, cardStyle]}
+      style={[styles.card, cardStyle]}
       activeOpacity={0.7}
     >
-      <View style={styles.card}>
+      {/* Article Image */}
+      {hasFile && fileType === "image" && showImage && (
+        <Image
+          source={{ uri: fileUrl }}
+          style={styles.articleImage}
+          resizeMode="cover"
+        />
+      )}
+      
+      <View style={styles.cardContent}>
+        {/* Article Header */}
         <View style={styles.cardHeader}>
-          <View style={styles.iconContainer}>
-            {hasFile ? (
-              fileType === "image" ? (
-                <Image
-                  source={{ uri: fileUrl }}
-                  style={styles.thumbnailImage}
-                  resizeMode="cover"
-                />
-              ) : (
-                <Ionicons name="document" size={24} color="#3b82f6" />
-              )
-            ) : (
-              <Ionicons name="document-text" size={24} color="#3b82f6" />
-            )}
-          </View>
-          <View style={styles.cardHeaderText}>
-            <Text style={styles.title} numberOfLines={2}>
-              {item.title}
-            </Text>
-            <View style={styles.metaContainer}>
-              <Ionicons name="time-outline" size={14} color="#6b7280" />
+          {showTag && (
+            <View style={styles.articleTag}>
+              <Text style={styles.articleTagText}>NEWS</Text>
+            </View>
+          )}
+          {showDate && (
+            <View style={styles.dateContainer}>
+              <Ionicons name="time-outline" size={12} color="#6B7280" />
               <Text style={styles.dateText}>
                 {getHumanFriendlyDate(item.created)}
               </Text>
             </View>
-          </View>
+          )}
         </View>
 
-        {showDescription && item.description && (
-          <View style={styles.descriptionContainer}>
-            <Text style={styles.description} numberOfLines={3}>
-              {item.description.replace(/<[^>]*>/g, "")}
-            </Text>
-          </View>
+        {/* Article Title */}
+        <Text style={styles.articleTitle} numberOfLines={2}>
+          {item.title}
+        </Text>
+
+        {/* Article Preview */}
+        {item.description && (
+          <Text style={styles.articlePreview} numberOfLines={2}>
+            {formatDescription(item.description)}
+          </Text>
         )}
 
-        {hasFile && (
-          <View style={styles.filePreviewContainer}>
-            <Ionicons
-              name={fileType === "image" ? "image-outline" : "document-outline"}
-              size={14}
-              color="#6b7280"
-            />
-            <Text style={styles.filePreviewText}>
-              {fileType === "image" ? "Image" : "PDF Document"} attached
-            </Text>
+        {/* Article Footer */}
+        <View style={styles.cardFooter}>
+          <View style={styles.readMoreContainer}>
+            <Text style={styles.readMoreText}>Read full article</Text>
+            <Ionicons name="arrow-forward" size={14} color="#3B82F6" />
           </View>
-        )}
-
-        {showFooter && (
-          <View style={styles.cardFooter}>
-            {showTag && (
-              <View style={styles.tagContainer}>
-                <Text style={styles.tag}>Press Release</Text>
-              </View>
-            )}
-
-            {/* {showPreviewButton && (
-                <TouchableOpacity
-                  style={styles.previewButton}
-                  onPress={() => onPress?.(item)}
-                >
-                  <Text style={styles.previewButtonText}>Preview</Text>
-                  <Ionicons name="eye-outline" size={14} color="#3b82f6" />
-                </TouchableOpacity>
-              )}
-  
-              {!showPreviewButton && (
-                <View style={styles.cardActions}>
-                  <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
-                </View>
-              )} */}
-          </View>
-        )}
+          
+          {hasFile && (
+            <View style={styles.attachmentIndicator}>
+              <FontAwesome5 
+                name={fileType === "image" ? "image" : "file-pdf"} 
+                size={12} 
+                color="#6B7280" 
+              />
+            </View>
+          )}
+        </View>
       </View>
     </TouchableOpacity>
   );
 };
 
 const styles = StyleSheet.create({
-  // Standard Card Styles
-  cardContainer: {
-    marginBottom: 16,
-  },
+  // Standard Article Card
   card: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
     borderWidth: 1,
-    borderColor: "#f1f5f9",
+    borderColor: '#E5E7EB',
+  },
+  articleImage: {
+    width: '100%',
+    height: 160,
+    backgroundColor: '#F3F4F6',
+  },
+  cardContent: {
+    padding: 16,
   },
   cardHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "#eff6ff",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-    overflow: "hidden",
+  articleTag: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
   },
-  thumbnailImage: {
-    width: "100%",
-    height: "100%",
-    borderRadius: 8,
+  articleTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#1E40AF',
+    letterSpacing: 0.5,
   },
-  cardHeaderText: {
-    flex: 1,
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#111827",
-    lineHeight: 22,
-    marginBottom: 4,
-  },
-  metaContainer: {
-    flexDirection: "row",
-    alignItems: "center",
+  dateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 4,
   },
   dateText: {
-    fontSize: 12,
-    color: "#6b7280",
-    fontWeight: "500",
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '500',
   },
-  descriptionContainer: {
-    marginBottom: 12,
+  articleTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    lineHeight: 22,
+    marginBottom: 8,
   },
-  description: {
+  articlePreview: {
     fontSize: 14,
-    color: "#4b5563",
+    color: '#4B5563',
     lineHeight: 20,
-  },
-  filePreviewContainer: {
-    backgroundColor: "#f3f4f6",
-    padding: 8,
-    borderRadius: 8,
     marginBottom: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  filePreviewText: {
-    fontSize: 13,
-    color: "#4b5563",
   },
   cardFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
   },
-  tagContainer: {
-    backgroundColor: "#f0f9ff",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  tag: {
-    fontSize: 11,
-    color: "#0284c7",
-    fontWeight: "600",
-    textTransform: "uppercase",
-  },
-  cardActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  previewButton: {
-    flexDirection: "row",
-    alignItems: "center",
+  readMoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
   },
-  previewButtonText: {
-    fontSize: 12,
-    color: "#3b82f6",
-    fontWeight: "500",
+  readMoreText: {
+    fontSize: 13,
+    color: '#3B82F6',
+    fontWeight: '600',
+  },
+  attachmentIndicator: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // Compact Card Styles
-  compactCardContainer: {
-    marginBottom: 8,
-  },
   compactCard: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
     padding: 12,
-    shadowColor: "#000",
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 2,
+    elevation: 1,
     borderWidth: 1,
-    borderColor: "#f3f4f6",
+    borderColor: '#F3F4F6',
   },
-  compactCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  compactIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: "#eff6ff",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-    overflow: "hidden",
-  },
-  compactThumbnail: {
-    width: "100%",
-    height: "100%",
+  compactImage: {
+    width: 60,
+    height: 60,
     borderRadius: 6,
+    marginRight: 12,
+    backgroundColor: '#F3F4F6',
   },
-  compactCardContent: {
+  compactContent: {
     flex: 1,
+  },
+  tagContainer: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+    marginBottom: 4,
+  },
+  tagText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#1E40AF',
+    letterSpacing: 0.5,
   },
   compactTitle: {
     fontSize: 14,
-    fontWeight: "600",
-    color: "#111827",
-    lineHeight: 20,
-    marginBottom: 2,
+    fontWeight: '600',
+    color: '#111827',
+    lineHeight: 18,
+    marginBottom: 4,
   },
-  compactMeta: {
-    flexDirection: "row",
-    alignItems: "center",
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  timeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 4,
   },
-  compactDate: {
+  metaText: {
     fontSize: 11,
-    color: "#6b7280",
+    color: '#6B7280',
+  },
+  previewText: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    flex: 1,
+    marginLeft: 8,
+    textAlign: 'right',
   },
 });
 

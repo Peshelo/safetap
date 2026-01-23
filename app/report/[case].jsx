@@ -21,6 +21,8 @@ import pb from "../../lib/connection";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import CustomHeader from "../components/Header";
+import { useNavigation } from "@react-navigation/native";
+
 
 const priorities = [
   { label: "Low", value: "green" },
@@ -29,6 +31,8 @@ const priorities = [
 ];
 
 const Case = () => {
+  
+  const navigation = useNavigation();
   const params = useLocalSearchParams();
   const [formData, setFormData] = useState({
     description: "",
@@ -212,6 +216,8 @@ const Case = () => {
       subtitle={`Report ${params?.case}`}
       showBackButton={true}
       showLogo={true}
+       onBack={() => navigation.goBack()}
+      
       // onBackPress={() => router.back()}
     />
 
@@ -238,13 +244,14 @@ const Case = () => {
         
         <View style={styles.inputCard}>
           <Text style={styles.inputLabel}>Phone Number</Text>
-          <TextInput
-            style={[styles.input, errors.phone_number && styles.inputError]}
-            placeholder="Enter your phone number..."
-            value={formData.phone_number}
-            onChangeText={(text) => handleInputChange('phone_number', text)}
-            keyboardType="phone-pad"
-          />
+         <TextInput
+  style={[styles.input, errors.phone_number && styles.inputError]}
+  placeholder="Enter your phone number..."
+  placeholderTextColor="#94a3b8"   // 👈 ADD THIS
+  value={formData.phone_number}
+  onChangeText={(text) => handleInputChange('phone_number', text)}
+  keyboardType="phone-pad"
+/>
           {errors.phone_number && (
             <Text style={styles.errorText}>{errors.phone_number}</Text>
           )}
@@ -252,17 +259,18 @@ const Case = () => {
       
         <View style={styles.inputCard}>
           <Text style={styles.inputLabel}>Description</Text>
-          <TextInput
-            style={[
-              styles.textArea, 
-              errors.description && styles.inputError
-            ]}
-            placeholder="Describe the emergency in detail..."
-            multiline
-            numberOfLines={4}
-            value={formData.description}
-            onChangeText={(text) => handleInputChange('description', text)}
-          />
+         <TextInput
+  style={[
+    styles.textArea,
+    errors.description && styles.inputError
+  ]}
+  placeholder="Describe the emergency in detail..."
+  placeholderTextColor="#94a3b8"   // 👈 ADD THIS
+  multiline
+  numberOfLines={4}
+  value={formData.description}
+  onChangeText={(text) => handleInputChange('description', text)}
+/>
           {errors.description && (
             <Text style={styles.errorText}>{errors.description}</Text>
           )}

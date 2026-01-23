@@ -1,12 +1,15 @@
-import { View } from "react-native";
+import { View, Platform } from "react-native";
 import React from "react";
 import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons, MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
-import '../global.css';
+import {
+  Ionicons,
+  MaterialCommunityIcons,
+  FontAwesome5,
+} from "@expo/vector-icons";
+import "../global.css";
 
-
-export default function RootLayout (){
+export default function RootLayout() {
   const insets = useSafeAreaInsets();
 
   return (
@@ -14,23 +17,20 @@ export default function RootLayout (){
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: "white",
-          position: "absolute",
-          bottom: 0,
+          backgroundColor: "#fff",
+          // position: "absolute",
+          // bottom: insets.bottom ? insets.bottom : 10,
           left: 20,
           right: 20,
-          height: 60,
-          borderRadius: 15,
+          height: 60 ,
+
           shadowColor: "#000",
-          shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.25,
-          shadowRadius: 3.84,
-          elevation: 5,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.1,
+          shadowRadius: 3,
           borderTopWidth: 0,
           paddingHorizontal: 10,
-          // Use safe area insets for bottom padding
-          paddingBottom: insets.bottom > 0 ? insets.bottom : 10,
-          marginBottom: insets.bottom > 0 ? 0 : 10,
+          paddingBottom: insets.bottom ? insets.bottom : 10,
         },
         tabBarActiveTintColor: "#2563eb",
         tabBarInactiveTintColor: "#64748b",
@@ -39,6 +39,7 @@ export default function RootLayout (){
           fontWeight: "500",
           paddingBottom: 4,
         },
+        tabBarHideOnKeyboard: true, // hides tab bar when keyboard is open
       }}
     >
       <Tabs.Screen
@@ -47,7 +48,7 @@ export default function RootLayout (){
           title: "Home",
           tabBarIcon: ({ focused }) => (
             <Ionicons
-              name={focused ? "albums" : "albums-outline"}
+              name={focused ? "home" : "home-outline"}
               size={24}
               color={focused ? "#2563eb" : "#64748b"}
             />
@@ -69,57 +70,13 @@ export default function RootLayout (){
         }}
       />
 
-      {/* <Tabs.Screen 
-        name="sos"
-         
-        options={{ 
-          title: 'SOS',
-        
-          tabBarIcon: ({ focused }) => (
-            <View style={{
-              width: 60,
-              height: 60,
-              bottom: 10,
-              borderRadius: 10,
-              backgroundColor: '#ef4444',
-              justifyContent: 'center',
-              alignItems: 'center',
-              marginBottom: 20,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.25,
-              shadowRadius: 3.84,
-              elevation: 5,
-            }}>
-              <FontAwesome5 
-                name='exclamation-triangle' 
-                size={24} 
-                color='white' 
-              />
-            </View>
-          ),
-        }}
-      /> */}
-      {/* <Tabs.Screen
-        name="trackcase"
-        options={{
-          title: "Track Case",
-          tabBarIcon: ({ focused }) => (
-            <Ionicons
-              name={focused ? "search" : "search-outline"}
-              size={24}
-              color={focused ? "#2563eb" : "#64748b"}
-            />
-          ),
-        }}
-      /> */}
       <Tabs.Screen
         name="reports"
         options={{
           title: "Reports",
           tabBarIcon: ({ focused }) => (
-            <Ionicons
-              name={focused ? "document-text" : "document-text-outline"}
+            <MaterialCommunityIcons
+              name={focused ? "file-document" : "file-document-outline"}
               size={24}
               color={focused ? "#2563eb" : "#64748b"}
             />
@@ -133,8 +90,8 @@ export default function RootLayout (){
           title: "Profile",
           tabBarIcon: ({ focused }) => (
             <Ionicons
-              name={focused ? "person" : "person-outline"}
-              size={24}
+              name={focused ? "person-circle" : "person-circle-outline"}
+              size={28}
               color={focused ? "#2563eb" : "#64748b"}
             />
           ),
@@ -142,6 +99,4 @@ export default function RootLayout (){
       />
     </Tabs>
   );
-};
-
-
+}

@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { useState } from "react";
 
-export default function PhoneScreen() {
+export default function Initial() {
   const [phone, setPhone] = useState("");
 
   const savePhone = async () => {

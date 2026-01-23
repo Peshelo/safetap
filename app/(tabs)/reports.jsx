@@ -16,16 +16,14 @@ import { useNavigation } from "@react-navigation/native";
 const Reports = () => {
   const router = useRouter();
   const navigation = useNavigation();
+
   const emergencyTypes = [
-    // { id: 1, title: "Fire", icon: "flame", iconSet: 'Ionicons', color: "#f97316" },
-    // { id: 2, title: "Robbery", icon: "money-bill", iconSet: 'FontAwesome5', color: "#2563eb", merchant: 'dvlppj72naeig7q' },
     {
       id: 3,
       title: "Crime",
       icon: "handcuffs",
       iconSet: "MaterialCommunityIcons",
       color: "#ef4444",
-      merchant: "dvlppj72naeig7q",
       path: "crime",
     },
     {
@@ -36,16 +34,9 @@ const Reports = () => {
       color: "#eab308",
       path: "accident",
     },
-    // { id: 5, title: "Natural Disaster", icon: "weather-hurricane", iconSet: 'MaterialCommunityIcons', color: "#8b5cf6" },
-    // { id: 6, title: "Domestic Violence", icon: "home-heart", iconSet: 'MaterialCommunityIcons', color: "#ec4899", merchant: 'dvlppj72naeig7q' },
-    // { id: 7, title: "Suspicious Activity", icon: "eye", iconSet: 'Ionicons', color: "#0ea5e9", merchant: 'dvlppj72naeig7q' },
-    // { id: 8, title: "Theft", icon: "shopping-bag", iconSet: 'FontAwesome5', color: "#f59e0b", merchant: 'dvlppj72naeig7q' },
-    // { id: 9, title: "Lost Item", icon: "help-circle", iconSet: 'Ionicons', color: "#b45309" },
-    // { id: 10, title: "Leave a comment or complaint", icon: "comment" , iconSet: 'MaterialCommunityIcons', color: "#0202ff",path:'complaint' },
   ];
 
   const handleReport = (report) => {
-    // Alert.alert(report.path)
     router.push(`/report/${report.title}`);
   };
 
@@ -65,37 +56,40 @@ const Reports = () => {
   };
 
   return (
-    <GestureHandlerRootView className="flex-1 bg-gray-50">
-      <Stack.Screen
-        options={{
-          headerShown: false,
-        }}
-      />
+    <GestureHandlerRootView className="flex-1 bg-gray-100">
+      <Stack.Screen options={{ headerShown: false }} />
 
       <CustomHeader
         title="Report"
         subtitle="Report a case"
         onBack={() => navigation.goBack()}
-        showBackButton={true}
+        showBackButton
         showLogo={false}
       />
 
-      <View className="p-2">
-        <Text className="text-lg px-2 text-gray-600 mt-10 mb-2">
-          Select the type of emergency
-        </Text>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <View className="px-4 pt-6">
+          <Text className="text-sm uppercase tracking-wider text-gray-500 mb-2">
+            Emergency types
+          </Text>
+          <Text className="text-lg font-semibold text-gray-900 mb-6">
+            What would you like to report?
+          </Text>
 
-        <ScrollView>
-          <View className="space-y-3 p-2 scroll-mb-10">
+          <View className="space-y-4">
             {emergencyTypes.map((emergency) => (
               <TouchableOpacity
                 key={emergency.id}
+                activeOpacity={0.85}
                 onPress={() => handleReport(emergency)}
-                className="bg-white rounded-xl mb-1 p-5 flex-row items-center justify-between shadow-sm"
+                className="bg-white rounded-2xl px-5 py-6 mt-3 flex-row items-center justify-between shadow-slate-50 shadow"
               >
                 <View className="flex-row items-center">
                   <View
-                    className="w-10 h-10 rounded-lg items-center justify-center mr-4"
+                    className="w-12 h-12 rounded-xl items-center justify-center mr-4"
                     style={{ backgroundColor: emergency.color + "20" }}
                   >
                     {renderIcon(
@@ -104,36 +98,65 @@ const Reports = () => {
                       emergency.color
                     )}
                   </View>
-                  <Text className="text-base font-medium text-gray-900">
-                    {emergency.title}
-                  </Text>
+
+                  <View>
+                    <Text className="text-base font-semibold text-gray-900">
+                      {emergency.title}
+                    </Text>
+                    <Text className="text-sm text-gray-500 mt-1">
+                      Tap to continue
+                    </Text>
+                  </View>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color="#9ca3af"
+                />
               </TouchableOpacity>
             ))}
-            <Text className="mt-10 text-gray-600">
-              Feel free to leave a comment
+          </View>
+
+          {/* Secondary action */}
+          <View className="mt-10">
+            <Text className="text-sm text-gray-500 mb-3">
+              Other feedback
             </Text>
+
             <Link
               href="/report/complaint"
-              className="flex bg-white rounded-xl mt-2 p-5 w-full flex-row items-center justify-between shadow-sm"
+              className="bg-white rounded-2xl px-5 py-6 flex-row items-center justify-between shadow"
             >
-              <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center">
                 <View
-                  className="w-10 h-10 rounded-lg items-center justify-center mr-4"
+                  className="w-12 h-12 rounded-xl items-center justify-center mr-4"
                   style={{ backgroundColor: "#0202ff20" }}
                 >
-                  {renderIcon("MaterialCommunityIcons", "comment", "#0202ff")}
+                  {renderIcon(
+                    "MaterialCommunityIcons",
+                    "comment",
+                    "#0202ff"
+                  )}
                 </View>
-                <Text className="text-base font-medium text-gray-900">
-                  Leave a comment or complaint
-                </Text>
+                <View>
+                  <Text className="text-base font-semibold text-gray-900">
+                    Comment or Complaint
+                  </Text>
+                  <Text className="text-sm text-gray-500 mt-1">
+                    Leave feedback or suggestions
+                  </Text>
+                </View>
               </View>
-              {/* <Ionicons name="chevron-forward" size={18} color="#9ca3af" /> */}
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color="#9ca3af"
+              />
             </Link>
           </View>
-        </ScrollView>
-      </View>
+        </View>
+      </ScrollView>
     </GestureHandlerRootView>
   );
 };

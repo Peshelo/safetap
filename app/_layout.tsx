@@ -31,7 +31,12 @@ export default function RootLayout() {
 
   return (
       <Stack>
+                        <Stack.Screen name="(tabs)/reports" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)/contacts" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+
+
+
         <Stack.Screen name="+not-found" />
       </Stack>
 
