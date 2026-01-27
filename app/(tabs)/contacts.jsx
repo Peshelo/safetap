@@ -20,99 +20,66 @@ import pb from "../../lib/connection";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Stack, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import CustomHeader from "../components/Header";
 import { useNavigation } from "@react-navigation/native";
 import useNetworkStatus from "../hooks/useNetworkStatus";
 
 const { width } = Dimensions.get("window");
 
-// Zimbabwe provinces and districts
+// Updated Zimbabwe provinces and districts
 const zimbabweProvinces = {
-  Bulawayo: ["Bulawayo"],
-  Harare: ["Harare"],
+  Harare: [
+    "Harare Central", "Harare South", "Harare East", "Harare West",
+    "Harare North", "Mbare", "Highfield", "Kuwadzana", "Dzivarasekwa",
+    "Budiriro", "Glen View", "Epworth"
+  ],
+  Mashonaland_Central: [
+    "Bindura", "Guruve", "Mazowe", "Mbire", "Mount Darwin",
+    "Muzarabani", "Rushinga", "Shamva", "Centenary", "Concession"
+  ],
+  Mashonaland_West: [
+    "Chegutu", "Hurungwe", "Kariba", "Makonde", "Mhondoro-Ngezi",
+    "Zvimba", "Sanyati", "Kadoma", "Chinhoyi", "Raffingora", "Banket"
+  ],
+  Mashonaland_East: [
+    "Chikomba", "Goromonzi", "Marondera", "Mudzi", "Murehwa",
+    "Mutoko", "Seke", "UMP", "Wedza", "Hwedza", "Macheke", "Nyamapanda"
+  ],
   Manicaland: [
-    "Buhera",
-    "Chimanimani",
-    "Chipinge",
-    "Makoni",
-    "Mutare",
-    "Mutasa",
-    "Nyanga",
-  ],
-  "Mashonaland Central": [
-    "Bindura",
-    "Guruve",
-    "Mazowe",
-    "Mbire",
-    "Mount Darwin",
-    "Muzarabani",
-    "Rushinga",
-    "Shamva",
-  ],
-  "Mashonaland East": [
-    "Chikomba",
-    "Goromonzi",
-    "Marondera",
-    "Mudzi",
-    "Murehwa",
-    "Mutoko",
-    "Seke",
-    "UMP",
-    "Wedza",
-  ],
-  "Mashonaland West": [
-    "Chegutu",
-    "Hurungwe",
-    "Kariba",
-    "Makonde",
-    "Mhondoro-Ngezi",
-    "Zvimba",
-    "Sanyati",
-    "Kadoma",
-  ],
-  Masvingo: [
-    "Bikita",
-    "Chiredzi",
-    "Chivi",
-    "Gutu",
-    "Masvingo",
-    "Mwenezi",
-    "Zaka",
-  ],
-  "Matabeleland North": [
-    "Binga",
-    "Bubi",
-    "Hwange",
-    "Lupane",
-    "Nkayi",
-    "Tsholotsho",
-    "Umguza",
-  ],
-  "Matabeleland South": [
-    "Beitbridge",
-    "Bulilima",
-    "Gwanda",
-    "Insiza",
-    "Mangwe",
-    "Matobo",
-    "Umzingwane",
+    "Buhera", "Chimanimani", "Chipinge", "Makoni", "Mutare",
+    "Mutasa", "Nyanga", "Rusape", "Penhalonga", "Chipinge Town",
+    "Hauna", "Cashel"
   ],
   Midlands: [
-    "Chirumhanzu",
-    "Gokwe North",
-    "Gokwe South",
-    "Gweru",
-    "Kwekwe",
-    "Mberengwa",
-    "Shurugwi",
-    "Zvishavane",
+    "Chirumhanzu", "Gokwe North", "Gokwe South", "Gweru",
+    "Kwekwe", "Mberengwa", "Shurugwi", "Zvishavane", "Redcliff",
+    "Mvuma", "Lalapanzi", "Shangani"
   ],
+  Masvingo: [
+    "Bikita", "Chiredzi", "Chivi", "Gutu", "Masvingo",
+    "Mwenezi", "Zaka", "Mashava", "Ngundu", "Rutenga", "Triangle"
+  ],
+  Matabeleland_North: [
+    "Binga", "Bubi", "Hwange", "Lupane", "Nkayi",
+    "Tsholotsho", "Umguza", "Victoria Falls", "Kamativi", "Dete"
+  ],
+  Matabeleland_South: [
+    "Beitbridge", "Bulilima", "Gwanda", "Insiza", "Mangwe",
+    "Matobo", "Umzingwane", "Plumtree", "Esigodini", "Filabusi"
+  ],
+  Bulawayo: [
+    "Bulawayo Central", "Bulawayo South", "Bulawayo East",
+    "Bulawayo West", "Mpopoma", "Entumbane", "Nkulumane",
+    "Cowdray Park", "Luveve", "Matshobana", "Mabuthweni"
+  ],
+  Matebebeland: [
+    "All Districts"
+  ]
 };
 
 const CACHE_KEY = "emergencyContacts";
 const CACHE_TIMESTAMP_KEY = "emergencyContactsTimestamp";
 const CACHE_EXPIRY_TIME = 24 * 60 * 60 * 1000; // 24 hours
-const PAGE_SIZE = 15; // Load 15 contacts at a time
+const PAGE_SIZE = 15;
 
 const EmergencyContacts = () => {
   const navigation = useNavigation();
@@ -122,7 +89,6 @@ const EmergencyContacts = () => {
   const [displayedContacts, setDisplayedContacts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedProvince, setSelectedProvince] = useState("");
   const [selectedDistrict, setSelectedDistrict] = useState("");
@@ -133,27 +99,15 @@ const EmergencyContacts = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [totalContacts, setTotalContacts] = useState(0);
-  const [downloadModalVisible, setDownloadModalVisible] = useState(false);
-  const [downloading, setDownloading] = useState(false);
-  const [showNotFoundForm, setShowNotFoundForm] = useState(false);
-  const [stationName, setStationName] = useState("");
-  const [stationProvince, setStationProvince] = useState("");
-  const [stationDistrict, setStationDistrict] = useState("");
-  const [stationContact, setStationContact] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   
   const flatListRef = useRef(null);
+  const searchTimeoutRef = useRef(null);
   const isOnline = useNetworkStatus();
 
   useEffect(() => {
     fetchFirstPage();
   }, []);
-
-  useEffect(() => {
-    if (isOnline && contacts.length > 0) {
-      refreshDataIfNeeded();
-    }
-  }, [isOnline]);
 
   useEffect(() => {
     if (selectedProvince) {
@@ -165,9 +119,33 @@ const EmergencyContacts = () => {
     }
   }, [selectedProvince]);
 
+  // Debounced search effect
   useEffect(() => {
-    applyFilters();
-  }, [searchTerm, selectedProvince, selectedDistrict, contacts]);
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (searchTerm.trim() === "") {
+      // If search is cleared, reset to original filtered contacts
+      if (selectedProvince || selectedDistrict) {
+        fetchFirstPage("", selectedProvince, selectedDistrict);
+      } else {
+        fetchFirstPage();
+      }
+      return;
+    }
+
+    setIsSearching(true);
+    searchTimeoutRef.current = setTimeout(() => {
+      handleSearch();
+    }, 500);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchTerm]);
 
   const loadFromCache = async () => {
     try {
@@ -200,272 +178,318 @@ const EmergencyContacts = () => {
     }
   };
 
-  const fetchFirstPage = async () => {
+  const fetchFirstPage = async (searchQuery = "", province = "", district = "") => {
     setLoading(true);
     try {
-      // Try to load from cache first
-      const cachedData = await loadFromCache();
+      const queryParams = {
+        sort: "station",
+        page: 1,
+        perPage: PAGE_SIZE,
+      };
+
+      // Build filter query
+      let filterQuery = "";
+      const filters = [];
       
-      if (cachedData) {
-        setContacts(cachedData);
-        setFilteredContacts(cachedData);
-        setDisplayedContacts(cachedData.slice(0, PAGE_SIZE));
-        setTotalContacts(cachedData.length);
-        setUsingCachedData(true);
-        setHasMore(cachedData.length > PAGE_SIZE);
+      if (searchQuery) {
+        filters.push(`(station~"${searchQuery}" || member_in_charge~"${searchQuery}" || specialty~"${searchQuery}")`);
+      }
+      
+      if (province) {
+        filters.push(`province="${province}"`);
+      }
+      
+      if (district) {
+        filters.push(`district="${district}"`);
+      }
+      
+      if (filters.length > 0) {
+        filterQuery = filters.join(" && ");
+        queryParams.filter = filterQuery;
       }
 
-      // If online, fetch fresh data
+      let resultList;
+      let fromCache = false;
+      
       if (isOnline) {
-        const resultList = await pb.collection("contacts").getList(1, PAGE_SIZE, {
-          sort: "station",
-        });
-
-        const newContacts = resultList.items;
-        setContacts(newContacts);
-        setFilteredContacts(newContacts);
-        setDisplayedContacts(newContacts);
-        setTotalContacts(resultList.totalItems);
-        setUsingCachedData(false);
-        setCurrentPage(1);
-        setHasMore(resultList.totalItems > PAGE_SIZE);
-
-        await saveToCache(newContacts);
-      } else if (!cachedData) {
-        Alert.alert(
-          "Offline Mode",
-          "Connect to internet to load police stations. You can search cached data if available.",
-          [{ text: "OK" }]
-        );
+        try {
+          // Try to fetch from API when online
+          resultList = await pb.collection("contacts").getList(
+            queryParams.page,
+            queryParams.perPage,
+            queryParams
+          );
+        } catch (error) {
+          console.log("API fetch failed, trying cache...", error);
+          // If API fails, try cache
+          const cachedData = await loadFromCache();
+          if (cachedData) {
+            fromCache = true;
+            // Filter cached data locally
+            let filteredData = cachedData;
+            
+            if (searchQuery) {
+              const term = searchQuery.toLowerCase();
+              filteredData = filteredData.filter(
+                (contact) =>
+                  contact.station?.toLowerCase().includes(term) ||
+                  contact.member_in_charge?.toLowerCase().includes(term) ||
+                  contact.specialty?.toLowerCase().includes(term)
+              );
+            }
+            
+            if (province) {
+              filteredData = filteredData.filter(
+                (contact) => contact.province === province
+              );
+            }
+            
+            if (district) {
+              filteredData = filteredData.filter(
+                (contact) => contact.district === district
+              );
+            }
+            
+            resultList = {
+              items: filteredData.slice(0, PAGE_SIZE),
+              totalItems: filteredData.length,
+              page: 1,
+              perPage: PAGE_SIZE,
+              totalPages: Math.ceil(filteredData.length / PAGE_SIZE)
+            };
+          } else {
+            resultList = { items: [], totalItems: 0, page: 1, perPage: PAGE_SIZE, totalPages: 0 };
+          }
+        }
+      } else {
+        // When offline, try cache
+        const cachedData = await loadFromCache();
+        if (cachedData) {
+          fromCache = true;
+          // Filter cached data locally
+          let filteredData = cachedData;
+          
+          if (searchQuery) {
+            const term = searchQuery.toLowerCase();
+            filteredData = filteredData.filter(
+              (contact) =>
+                contact.station?.toLowerCase().includes(term) ||
+                contact.member_in_charge?.toLowerCase().includes(term) ||
+                contact.specialty?.toLowerCase().includes(term)
+            );
+          }
+          
+          if (province) {
+            filteredData = filteredData.filter(
+              (contact) => contact.province === province
+            );
+          }
+          
+          if (district) {
+            filteredData = filteredData.filter(
+              (contact) => contact.district === district
+            );
+          }
+          
+          resultList = {
+            items: filteredData.slice(0, PAGE_SIZE),
+            totalItems: filteredData.length,
+            page: 1,
+            perPage: PAGE_SIZE,
+            totalPages: Math.ceil(filteredData.length / PAGE_SIZE)
+          };
+        } else {
+          resultList = { items: [], totalItems: 0, page: 1, perPage: PAGE_SIZE, totalPages: 0 };
+        }
       }
+
+      const newContacts = resultList.items;
+      setContacts(newContacts);
+      setFilteredContacts(newContacts);
+      setDisplayedContacts(newContacts);
+      setTotalContacts(resultList.totalItems);
+      setCurrentPage(1);
+      setHasMore(newContacts.length >= PAGE_SIZE && resultList.totalItems > PAGE_SIZE);
+      setUsingCachedData(fromCache);
+
+      if (isOnline && newContacts.length > 0 && !searchQuery && !province && !district && !fromCache) {
+        await saveToCache(newContacts);
+      }
+
     } catch (error) {
       console.error("Failed to fetch first page:", error);
-      if (!isOnline && !contacts.length) {
-        Alert.alert(
-          "Connection Error",
-          "Unable to load police stations. Please check your connection.",
-          [{ text: "OK" }]
-        );
-      }
+      // Don't show error, just set empty state
+      setContacts([]);
+      setFilteredContacts([]);
+      setDisplayedContacts([]);
+      setTotalContacts(0);
+      setUsingCachedData(false);
     } finally {
       setLoading(false);
+      setIsSearching(false);
     }
   };
 
   const loadMoreContacts = async () => {
-    if (!hasMore || loadingMore) return;
+    if (!hasMore || loadingMore || isSearching) return;
 
     try {
       setLoadingMore(true);
       const nextPage = currentPage + 1;
+      const startIndex = currentPage * PAGE_SIZE;
       
-      if (isOnline) {
-        const resultList = await pb.collection("contacts").getList(
-          nextPage,
-          PAGE_SIZE,
-          { sort: "station" }
-        );
+      if (searchTerm || selectedProvince || selectedDistrict) {
+        // For filtered data, load more from current filtered set
+        const allFilteredData = await getAllFilteredData();
+        const moreContacts = allFilteredData.slice(startIndex, startIndex + PAGE_SIZE);
+        
+        const newContacts = [...displayedContacts, ...moreContacts];
+        setDisplayedContacts(newContacts);
+        setCurrentPage(nextPage);
+        setHasMore(allFilteredData.length > newContacts.length);
+      } else {
+        // For non-filtered data, fetch from API or cache
+        const queryParams = {
+          sort: "station",
+          page: nextPage,
+          perPage: PAGE_SIZE,
+        };
+
+        let resultList;
+        if (isOnline && !usingCachedData) {
+          try {
+            resultList = await pb.collection("contacts").getList(
+              queryParams.page,
+              queryParams.perPage,
+              queryParams
+            );
+          } catch (error) {
+            console.log("API fetch failed for more contacts, using cache...");
+            const cachedData = await loadFromCache();
+            if (cachedData) {
+              const startIdx = (nextPage - 1) * PAGE_SIZE;
+              const endIdx = startIdx + PAGE_SIZE;
+              resultList = {
+                items: cachedData.slice(startIdx, endIdx),
+                totalItems: cachedData.length,
+                page: nextPage,
+                perPage: PAGE_SIZE,
+                totalPages: Math.ceil(cachedData.length / PAGE_SIZE)
+              };
+              setUsingCachedData(true);
+            } else {
+              resultList = { items: [], totalItems: 0, page: nextPage, perPage: PAGE_SIZE, totalPages: 0 };
+            }
+          }
+        } else {
+          const cachedData = await loadFromCache();
+          if (cachedData) {
+            const startIdx = (nextPage - 1) * PAGE_SIZE;
+            const endIdx = startIdx + PAGE_SIZE;
+            resultList = {
+              items: cachedData.slice(startIdx, endIdx),
+              totalItems: cachedData.length,
+              page: nextPage,
+              perPage: PAGE_SIZE,
+              totalPages: Math.ceil(cachedData.length / PAGE_SIZE)
+            };
+            setUsingCachedData(true);
+          } else {
+            resultList = { items: [], totalItems: 0, page: nextPage, perPage: PAGE_SIZE, totalPages: 0 };
+          }
+        }
 
         const newContacts = [...contacts, ...resultList.items];
         setContacts(newContacts);
         setFilteredContacts(newContacts);
-        setDisplayedContacts(newContacts.slice(0, nextPage * PAGE_SIZE));
+        setDisplayedContacts(newContacts);
         setCurrentPage(nextPage);
-        setHasMore(resultList.totalItems > newContacts.length);
+        setHasMore(newContacts.length < resultList.totalItems);
 
-        await saveToCache(newContacts);
-      } else {
-        // Load more from cache
-        const cachedData = await loadFromCache();
-        if (cachedData) {
-          const startIndex = currentPage * PAGE_SIZE;
-          const endIndex = startIndex + PAGE_SIZE;
-          const moreContacts = cachedData.slice(0, endIndex);
-          
-          setDisplayedContacts(moreContacts);
-          setCurrentPage(nextPage);
-          setHasMore(cachedData.length > moreContacts.length);
+        if (isOnline && resultList.items.length > 0 && !usingCachedData) {
+          await saveToCache(newContacts);
         }
       }
+
     } catch (error) {
       console.error("Failed to load more:", error);
+      setHasMore(false);
     } finally {
       setLoadingMore(false);
     }
   };
 
-  const downloadAllContacts = async () => {
-    if (!isOnline) {
-      Alert.alert(
-        "No Internet",
-        "You need internet connection to download all contacts."
-      );
-      return;
+  const getAllFilteredData = async () => {
+    // Get all filtered data from cache or API
+    const cachedData = await loadFromCache();
+    if (cachedData) {
+      let filteredData = cachedData;
+      
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        filteredData = filteredData.filter(
+          (contact) =>
+            contact.station?.toLowerCase().includes(term) ||
+            contact.member_in_charge?.toLowerCase().includes(term) ||
+            contact.specialty?.toLowerCase().includes(term)
+        );
+      }
+      
+      if (selectedProvince) {
+        filteredData = filteredData.filter(
+          (contact) => contact.province === selectedProvince
+        );
+      }
+      
+      if (selectedDistrict) {
+        filteredData = filteredData.filter(
+          (contact) => contact.district === selectedDistrict
+        );
+      }
+      
+      return filteredData;
     }
-
-    setDownloadModalVisible(true);
-    setDownloading(true);
-
-    try {
-      const allContacts = await pb.collection("contacts").getFullList({
-        sort: "station",
-      });
-
-      setContacts(allContacts);
-      setFilteredContacts(allContacts);
-      setDisplayedContacts(allContacts);
-      setTotalContacts(allContacts.length);
-      setHasMore(false);
-      setUsingCachedData(false);
-
-      await saveToCache(allContacts);
-
-      Alert.alert(
-        "Success",
-        `Downloaded all ${allContacts.length} contacts for offline use.`
-      );
-    } catch (error) {
-      console.error("Failed to download all contacts:", error);
-      Alert.alert("Error", "Failed to download all contacts.");
-    } finally {
-      setDownloading(false);
-      setDownloadModalVisible(false);
-    }
+    
+    // If no cache, return current filtered contacts
+    return filteredContacts;
   };
 
-  const applyFilters = () => {
-    let results = contacts;
+  const handleSearch = async () => {
+    const query = searchTerm.trim();
+    await fetchFirstPage(query, selectedProvince, selectedDistrict);
+  };
 
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      results = results.filter(
-        (contact) =>
-          contact.station.toLowerCase().includes(term) ||
-          (contact.member_in_charge &&
-            contact.member_in_charge.toLowerCase().includes(term)) ||
-          (contact.specialty && contact.specialty.toLowerCase().includes(term))
-      );
-    }
-
-    if (selectedProvince) {
-      results = results.filter(
-        (contact) => contact.province === selectedProvince
-      );
-    }
-
-    if (selectedDistrict) {
-      results = results.filter(
-        (contact) => contact.district === selectedDistrict
-      );
-    }
-
-    setFilteredContacts(results);
-    setDisplayedContacts(results.slice(0, currentPage * PAGE_SIZE));
-    setHasMore(results.length > displayedContacts.length);
+  const applyFilters = async () => {
+    await fetchFirstPage(searchTerm, selectedProvince, selectedDistrict);
   };
 
   const clearFilters = () => {
     setSearchTerm("");
     setSelectedProvince("");
     setSelectedDistrict("");
+    fetchFirstPage();
   };
 
   const handleRefresh = async () => {
-    if (!isOnline) {
-      Alert.alert(
-        "Offline",
-        "Connect to internet to refresh data. You're viewing cached contacts."
-      );
-      return;
-    }
-
     setRefreshing(true);
-    await fetchFirstPage();
+    await fetchFirstPage(searchTerm, selectedProvince, selectedDistrict);
     setRefreshing(false);
   };
 
-  const refreshDataIfNeeded = async () => {
-    try {
-      const cacheTimestamp = await AsyncStorage.getItem(CACHE_TIMESTAMP_KEY);
-      if (cacheTimestamp) {
-        const timestamp = parseInt(cacheTimestamp, 10);
-        const now = Date.now();
-
-        if (now - timestamp > 60 * 60 * 1000) {
-          await fetchFirstPage();
-        }
-      }
-    } catch (error) {
-      console.error("Error checking cache timestamp:", error);
-    }
-  };
-
-  const formatText = (text) => {
+  const formatText = (text, isDistrict = false) => {
     if (!text) return "";
-    // Replace underscores with spaces and capitalize first letter of each word
+    
+    // Convert to uppercase for districts when searching
+    if (isDistrict && (searchTerm || selectedProvince || selectedDistrict)) {
+      return text.toUpperCase();
+    }
+    
+    // Normal formatting for other cases
     return text
       .replace(/_/g, ' ')
       .split(' ')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join(' ');
-  };
-
-  const handleSubmitStationRequest = async () => {
-    if (!stationName.trim()) {
-      Alert.alert("Error", "Please enter the police station name");
-      return;
-    }
-
-    if (!stationProvince) {
-      Alert.alert("Error", "Please select a province");
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      // Here you would typically send this to your backend
-      // For now, we'll simulate the submission
-      const data = {
-        station_name: stationName,
-        province: stationProvince,
-        district: stationDistrict,
-        contact_number: stationContact,
-        status: "pending",
-        created: new Date().toISOString(),
-      };
-
-      console.log("Station request submitted:", data);
-      
-      Alert.alert(
-        "Request Submitted",
-        `Thank you! We've received your request for "${stationName}" in ${stationProvince}. We'll add it to our database soon.`,
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              setShowNotFoundForm(false);
-              resetForm();
-            }
-          }
-        ]
-      );
-
-      // In a real app, you would send this to your backend:
-      // await pb.collection('station_requests').create(data);
-
-    } catch (error) {
-      console.error("Error submitting request:", error);
-      Alert.alert("Error", "Failed to submit your request. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const resetForm = () => {
-    setStationName("");
-    setStationProvince("");
-    setStationDistrict("");
-    setStationContact("");
   };
 
   const renderContactItem = ({ item }) => (
@@ -498,7 +522,7 @@ const EmergencyContacts = () => {
           {formatText(item.station)}
         </Text>
         <Text style={styles.locationText} numberOfLines={1}>
-          {formatText(item.district)}, {formatText(item.province)}
+          {formatText(item.district, true)}, {formatText(item.province)}
         </Text>
         {item.member_in_charge && (
           <Text style={styles.inChargeText} numberOfLines={1}>
@@ -517,7 +541,7 @@ const EmergencyContacts = () => {
 
     return (
       <View style={styles.footerLoader}>
-        <ActivityIndicator size="small" color="#4a6da7" />
+        <ActivityIndicator size="small" color="#1E3A8A" />
         <Text style={styles.loadingMoreText}>Loading more stations...</Text>
       </View>
     );
@@ -526,14 +550,18 @@ const EmergencyContacts = () => {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Stack.Screen options={{ headerShown: false }} />
-
-      <CustomHeader
-        title="Police Stations"
-        subtitle="Find police stations nationwide"
-        showBackButton={true}
-        onBack={() => navigation.goBack()}
-        showLogo={false}
-      />
+      
+      {/* Simple Header */}
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Police Stations</Text>
+        <View style={styles.headerRight} />
+      </View>
 
       <View style={styles.container}>
         {/* Search Bar */}
@@ -547,8 +575,11 @@ const EmergencyContacts = () => {
               value={searchTerm}
               onChangeText={setSearchTerm}
               returnKeyType="search"
+              onSubmitEditing={handleSearch}
             />
-            {searchTerm ? (
+            {(isSearching || loading) ? (
+              <ActivityIndicator size="small" color="#1E3A8A" />
+            ) : searchTerm ? (
               <TouchableOpacity onPress={() => setSearchTerm("")}>
                 <Ionicons name="close-circle" size={20} color="#cbd5e0" />
               </TouchableOpacity>
@@ -557,146 +588,158 @@ const EmergencyContacts = () => {
                 <Ionicons 
                   name="filter" 
                   size={20} 
-                  color={showFilters ? "#4a6da7" : "#718096"} 
+                  color={showFilters ? "#1E3A8A" : "#718096"} 
                 />
               </TouchableOpacity>
             )}
           </View>
+        </View>
 
-          {/* Status Bar */}
-          <View style={styles.statusBar}>
-            {!isOnline ? (
-              <View style={styles.statusItem}>
-                <MaterialIcons name="signal-wifi-off" size={14} color="#e53e3e" />
-                <Text style={[styles.statusText, { color: "#e53e3e" }]}>
-                  Offline
-                </Text>
-              </View>
-            ) : usingCachedData ? (
-              <View style={styles.statusItem}>
-                <MaterialIcons name="cached" size={14} color="#d69e2e" />
-                <Text style={[styles.statusText, { color: "#d69e2e" }]}>
-                  Cached • <Text style={styles.refreshLink} onPress={handleRefresh}>Refresh</Text>
-                </Text>
-              </View>
-            ) : null}
-            
-            {contacts.length > 0 && (
-              <View style={styles.statusItem}>
-                <Ionicons name="location" size={14} color="#4a6da7" />
-                <Text style={styles.statusText}>
-                  {displayedContacts.length} of {totalContacts} shown
-                </Text>
-              </View>
-            )}
+        {/* Status Bar */}
+        <View style={styles.statusBar}>
+          <View style={styles.statusItem}>
+            <Ionicons 
+              name={isOnline ? "wifi" : "cloud-offline"} 
+              size={14} 
+              color={isOnline ? "#10B981" : "#6B7280"} 
+            />
+            <Text style={[styles.statusText, { color: isOnline ? "#10B981" : "#6B7280" }]}>
+              {isOnline ? "Online" : "Offline"}
+            </Text>
           </View>
+          
+          <View style={styles.statusItem}>
+            <MaterialIcons 
+              name={usingCachedData ? "cached" : "cloud-done"} 
+              size={14} 
+              color="#1E3A8A" 
+            />
+            <Text style={styles.statusText}>
+              {usingCachedData ? "Cached Data" : "Live Data"}
+            </Text>
+          </View>
+          
+          {displayedContacts.length > 0 && (
+            <View style={styles.statusItem}>
+              <Ionicons name="location" size={14} color="#1E3A8A" />
+              <Text style={styles.statusText}>
+                {displayedContacts.length} of {totalContacts}
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Filters Panel */}
         {showFilters && (
           <View style={styles.filtersPanel}>
-            <View style={styles.filterRow}>
-              <View style={styles.filterGroup}>
-                <Text style={styles.filterLabel}>Province</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <Text style={styles.filterLabel}>Filter by Province</Text>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.filterScroll}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.filterPill,
+                  !selectedProvince && styles.filterPillActive,
+                ]}
+                onPress={() => setSelectedProvince("")}
+              >
+                <Text style={[
+                  styles.filterPillText,
+                  !selectedProvince && styles.filterPillTextActive,
+                ]}>
+                  All
+                </Text>
+              </TouchableOpacity>
+              {Object.keys(zimbabweProvinces).map((province) => (
+                <TouchableOpacity
+                  key={province}
+                  style={[
+                    styles.filterPill,
+                    selectedProvince === province && styles.filterPillActive,
+                  ]}
+                  onPress={() => setSelectedProvince(province)}
+                >
+                  <Text style={[
+                    styles.filterPillText,
+                    selectedProvince === province && styles.filterPillTextActive,
+                  ]}>
+                    {formatText(province)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {selectedProvince && districts.length > 0 && (
+              <>
+                <Text style={[styles.filterLabel, { marginTop: 12 }]}>Filter by District</Text>
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.filterScroll}
+                >
                   <TouchableOpacity
                     style={[
                       styles.filterPill,
-                      !selectedProvince && styles.filterPillActive,
+                      !selectedDistrict && styles.filterPillActive,
                     ]}
-                    onPress={() => setSelectedProvince("")}
+                    onPress={() => setSelectedDistrict("")}
                   >
                     <Text style={[
                       styles.filterPillText,
-                      !selectedProvince && styles.filterPillTextActive,
+                      !selectedDistrict && styles.filterPillTextActive,
                     ]}>
                       All
                     </Text>
                   </TouchableOpacity>
-                  {Object.keys(zimbabweProvinces).map((province) => (
+                  {districts.map((district) => (
                     <TouchableOpacity
-                      key={province}
+                      key={district}
                       style={[
                         styles.filterPill,
-                        selectedProvince === province && styles.filterPillActive,
+                        selectedDistrict === district && styles.filterPillActive,
                       ]}
-                      onPress={() => setSelectedProvince(province)}
+                      onPress={() => setSelectedDistrict(district)}
                     >
                       <Text style={[
                         styles.filterPillText,
-                        selectedProvince === province && styles.filterPillTextActive,
+                        selectedDistrict === district && styles.filterPillTextActive,
                       ]}>
-                        {province}
+                        {formatText(district, true)}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
-              </View>
+              </>
+            )}
 
-              {selectedProvince && (
-                <View style={styles.filterGroup}>
-                  <Text style={styles.filterLabel}>District</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <TouchableOpacity
-                      style={[
-                        styles.filterPill,
-                        !selectedDistrict && styles.filterPillActive,
-                      ]}
-                      onPress={() => setSelectedDistrict("")}
-                    >
-                      <Text style={[
-                        styles.filterPillText,
-                        !selectedDistrict && styles.filterPillTextActive,
-                      ]}>
-                        All
-                      </Text>
-                    </TouchableOpacity>
-                    {districts.map((district) => (
-                      <TouchableOpacity
-                        key={district}
-                        style={[
-                          styles.filterPill,
-                          selectedDistrict === district && styles.filterPillActive,
-                        ]}
-                        onPress={() => setSelectedDistrict(district)}
-                      >
-                        <Text style={[
-                          styles.filterPillText,
-                          selectedDistrict === district && styles.filterPillTextActive,
-                        ]}>
-                          {district}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.filterActions}>
-              <TouchableOpacity style={styles.clearButton} onPress={clearFilters}>
-                <Ionicons name="close" size={16} color="#718096" />
-                <Text style={styles.clearButtonText}>Clear Filters</Text>
-              </TouchableOpacity>
-              
-              {isOnline && (
-                <TouchableOpacity 
-                  style={styles.downloadButton}
-                  onPress={downloadAllContacts}
-                >
-                  <Ionicons name="download-outline" size={16} color="#4a6da7" />
-                  <Text style={styles.downloadButtonText}>Download All</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+            <TouchableOpacity style={styles.applyButton} onPress={applyFilters}>
+              <Text style={styles.applyButtonText}>Apply Filters</Text>
+            </TouchableOpacity>
           </View>
         )}
 
         {/* Results */}
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#4a6da7" />
+            <ActivityIndicator size="large" color="#1E3A8A" />
             <Text style={styles.loadingText}>Loading police stations...</Text>
+          </View>
+        ) : displayedContacts.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="search-outline" size={48} color="#cbd5e0" />
+            <Text style={styles.emptyTitle}>No stations found</Text>
+            <Text style={styles.emptySubtitle}>
+              {searchTerm || selectedProvince || selectedDistrict
+                ? "Try adjusting your search or filters"
+                : "No data available"}
+            </Text>
+            {(searchTerm || selectedProvince || selectedDistrict) && (
+              <TouchableOpacity style={styles.emptyButton} onPress={clearFilters}>
+                <Text style={styles.emptyButtonText}>Clear Filters</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : (
           <FlatList
@@ -706,202 +749,52 @@ const EmergencyContacts = () => {
             keyExtractor={(item) => item.id}
             showsVerticalScrollIndicator={false}
             onEndReached={loadMoreContacts}
-            onEndReachedThreshold={0.5}
+            onEndReachedThreshold={0.3}
             ListFooterComponent={renderFooter}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={handleRefresh}
-                colors={["#4a6da7"]}
-                tintColor="#4a6da7"
+                colors={["#1E3A8A"]}
+                tintColor="#1E3A8A"
               />
-            }
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <Ionicons name="search-outline" size={48} color="#cbd5e0" />
-                <Text style={styles.emptyTitle}>No stations found</Text>
-                <Text style={styles.emptySubtitle}>
-                  {searchTerm || selectedProvince || selectedDistrict
-                    ? "Try adjusting your search or filters"
-                    : "Connect to internet to load stations"}
-                </Text>
-                {(searchTerm || selectedProvince || selectedDistrict) && (
-                  <TouchableOpacity style={styles.emptyButton} onPress={clearFilters}>
-                    <Text style={styles.emptyButtonText}>Clear Search & Filters</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            }
-            ListHeaderComponent={
-              <TouchableOpacity 
-                style={styles.notFoundButton}
-                onPress={() => setShowNotFoundForm(true)}
-              >
-                <Ionicons name="add-circle-outline" size={20} color="#4a6da7" />
-                <Text style={styles.notFoundButtonText}>Can't find a police station?</Text>
-              </TouchableOpacity>
             }
             contentContainerStyle={styles.listContainer}
           />
         )}
       </View>
-
-      {/* "Can't Find" Form Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={showNotFoundForm}
-        onRequestClose={() => setShowNotFoundForm(false)}
-      >
-        <View style={styles.formModalOverlay}>
-          <View style={styles.formModalContent}>
-            <View style={styles.formHeader}>
-              <Text style={styles.formTitle}>Request a Police Station</Text>
-              <TouchableOpacity 
-                onPress={() => setShowNotFoundForm(false)}
-                style={styles.closeButton}
-              >
-                <Ionicons name="close" size={24} color="#718096" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
-              <Text style={styles.formDescription}>
-                Help us improve our database by submitting police stations that are not listed.
-              </Text>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Police Station Name *</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="Enter station name"
-                  value={stationName}
-                  onChangeText={setStationName}
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Province *</Text>
-                <View style={styles.formSelect}>
-                  <TextInput
-                    style={styles.formInput}
-                    placeholder="Select province"
-                    value={stationProvince}
-                    onChangeText={setStationProvince}
-                  />
-                  <ScrollView horizontal style={styles.provinceScroll}>
-                    {Object.keys(zimbabweProvinces).map((province) => (
-                      <TouchableOpacity
-                        key={province}
-                        style={[
-                          styles.provincePill,
-                          stationProvince === province && styles.provincePillActive,
-                        ]}
-                        onPress={() => setStationProvince(province)}
-                      >
-                        <Text style={[
-                          styles.provincePillText,
-                          stationProvince === province && styles.provincePillTextActive,
-                        ]}>
-                          {province}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              </View>
-
-              {stationProvince && (
-                <View style={styles.formGroup}>
-                  <Text style={styles.formLabel}>District (Optional)</Text>
-                  <TextInput
-                    style={styles.formInput}
-                    placeholder="Enter district"
-                    value={stationDistrict}
-                    onChangeText={setStationDistrict}
-                  />
-                  {zimbabweProvinces[stationProvince] && (
-                    <ScrollView horizontal style={styles.districtScroll}>
-                      {zimbabweProvinces[stationProvince].map((district) => (
-                        <TouchableOpacity
-                          key={district}
-                          style={[
-                            styles.districtPill,
-                            stationDistrict === district && styles.districtPillActive,
-                          ]}
-                          onPress={() => setStationDistrict(district)}
-                        >
-                          <Text style={[
-                            styles.districtPillText,
-                            stationDistrict === district && styles.districtPillTextActive,
-                          ]}>
-                            {district}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  )}
-                </View>
-              )}
-
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Contact Number (Optional)</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="Enter contact number"
-                  value={stationContact}
-                  onChangeText={setStationContact}
-                  keyboardType="phone-pad"
-                />
-              </View>
-
-              <TouchableOpacity
-                style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
-                onPress={handleSubmitStationRequest}
-                disabled={submitting || !stationName || !stationProvince}
-              >
-                {submitting ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <>
-                    <Ionicons name="paper-plane-outline" size={18} color="#fff" />
-                    <Text style={styles.submitButtonText}>Submit Request</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-
-              <Text style={styles.formNote}>
-                Your submission will be reviewed and added to our database within 24-48 hours.
-              </Text>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Download Modal */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={downloadModalVisible}
-        onRequestClose={() => setDownloadModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <ActivityIndicator size="large" color="#4a6da7" />
-            <Text style={styles.modalText}>
-              {downloading ? "Downloading all contacts..." : "Processing..."}
-            </Text>
-            <Text style={styles.modalSubtext}>
-              This may take a moment depending on your connection
-            </Text>
-          </View>
-        </View>
-      </Modal>
     </GestureHandlerRootView>
   );
 };
 
 const styles = StyleSheet.create({
+  // Simple Header
+  header: {
+    backgroundColor: "#1E3A8A",
+    paddingTop: 50,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+  headerRight: {
+    width: 40,
+  },
+
   container: {
     flex: 1,
     backgroundColor: "#f8fafc",
@@ -934,8 +827,12 @@ const styles = StyleSheet.create({
   statusBar: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 8,
-    paddingHorizontal: 4,
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: "#f1f5f9",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
   },
   statusItem: {
     flexDirection: "row",
@@ -943,41 +840,30 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 12,
-    color: "#718096",
+    fontWeight: "500",
     marginLeft: 4,
-  },
-  refreshLink: {
-    color: "#4a6da7",
-    fontWeight: "600",
+    color: "#4B5563",
   },
   filtersPanel: {
     backgroundColor: "#fff",
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#e2e8f0",
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  filterRow: {
-    marginBottom: 12,
-  },
-  filterGroup: {
-    marginBottom: 12,
   },
   filterLabel: {
     fontSize: 12,
     fontWeight: "600",
     color: "#4a5568",
-    marginBottom: 6,
+    marginBottom: 8,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
+  filterScroll: {
+    marginBottom: 8,
+  },
   filterPill: {
     paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingVertical: 8,
     backgroundColor: "#f7fafc",
     borderRadius: 20,
     marginRight: 8,
@@ -985,8 +871,8 @@ const styles = StyleSheet.create({
     borderColor: "#e2e8f0",
   },
   filterPillActive: {
-    backgroundColor: "#4a6da7",
-    borderColor: "#4a6da7",
+    backgroundColor: "#1E3A8A",
+    borderColor: "#1E3A8A",
   },
   filterPillText: {
     fontSize: 13,
@@ -996,76 +882,35 @@ const styles = StyleSheet.create({
   filterPillTextActive: {
     color: "#fff",
   },
-  filterActions: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  applyButton: {
+    backgroundColor: "#1E3A8A",
+    paddingVertical: 12,
+    borderRadius: 10,
     alignItems: "center",
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
+    marginTop: 8,
   },
-  clearButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  clearButtonText: {
-    fontSize: 13,
-    color: "#718096",
-    marginLeft: 4,
-  },
-  downloadButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: "#f0f4ff",
-    borderRadius: 6,
-  },
-  downloadButtonText: {
-    fontSize: 13,
-    color: "#4a6da7",
+  applyButtonText: {
+    fontSize: 16,
+    color: "#fff",
     fontWeight: "600",
-    marginLeft: 4,
   },
   listContainer: {
     paddingBottom: 20,
-  },
-  notFoundButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#f0f4ff",
-    marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 8,
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#4a6da7",
-    borderStyle: "dashed",
-  },
-  notFoundButtonText: {
-    fontSize: 14,
-    color: "#4a6da7",
-    fontWeight: "600",
-    marginLeft: 8,
   },
   contactCard: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#fff",
-    marginHorizontal: 16,
-    marginTop: 8,
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
+    // marginHorizontal: 16,
+    // marginTop: 8,
+    padding: 14,
+    // borderRadius: 10,
+    borderWidth: 0.4,
     borderColor: "#e2e8f0",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    // shadowColor: "#000",
+    // shadowOffset: { width: 0, height: 1 },
+    // shadowOpacity: 0.05,
+    // shadowRadius: 2,
     elevation: 1,
   },
   contactIcon: {
@@ -1089,10 +934,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#718096",
     marginBottom: 2,
+    fontWeight: "500",
   },
   inChargeText: {
     fontSize: 11,
-    color: "#4a6da7",
+    color: "#1E3A8A",
     fontStyle: "italic",
   },
   contactArrow: {
@@ -1110,10 +956,10 @@ const styles = StyleSheet.create({
     color: "#718096",
   },
   emptyState: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
     padding: 40,
-    marginTop: 20,
   },
   emptyTitle: {
     fontSize: 16,
@@ -1138,7 +984,7 @@ const styles = StyleSheet.create({
   },
   emptyButtonText: {
     fontSize: 14,
-    color: "#4a6da7",
+    color: "#1E3A8A",
     fontWeight: "600",
   },
   footerLoader: {
@@ -1151,161 +997,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#718096",
     marginLeft: 8,
-  },
-  // Form Modal Styles
-  formModalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end",
-  },
-  formModalContent: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "80%",
-  },
-  formHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
-  },
-  formTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#2d3748",
-  },
-  closeButton: {
-    padding: 4,
-  },
-  formScroll: {
-    padding: 20,
-  },
-  formDescription: {
-    fontSize: 14,
-    color: "#718096",
-    marginBottom: 20,
-    lineHeight: 20,
-  },
-  formGroup: {
-    marginBottom: 16,
-  },
-  formLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#4a5568",
-    marginBottom: 8,
-  },
-  formInput: {
-    backgroundColor: "#f7fafc",
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: "#2d3748",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  formSelect: {
-    marginBottom: 8,
-  },
-  provinceScroll: {
-    marginTop: 8,
-  },
-  provincePill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: "#f7fafc",
-    borderRadius: 16,
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  provincePillActive: {
-    backgroundColor: "#4a6da7",
-    borderColor: "#4a6da7",
-  },
-  provincePillText: {
-    fontSize: 12,
-    color: "#718096",
-  },
-  provincePillTextActive: {
-    color: "#fff",
-  },
-  districtScroll: {
-    marginTop: 8,
-  },
-  districtPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    backgroundColor: "#f7fafc",
-    borderRadius: 12,
-    marginRight: 6,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  districtPillActive: {
-    backgroundColor: "#4a6da7",
-    borderColor: "#4a6da7",
-  },
-  districtPillText: {
-    fontSize: 11,
-    color: "#718096",
-  },
-  districtPillTextActive: {
-    color: "#fff",
-  },
-  submitButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#4a6da7",
-    padding: 16,
-    borderRadius: 10,
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  submitButtonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    fontSize: 16,
-    color: "#fff",
-    fontWeight: "600",
-    marginLeft: 8,
-  },
-  formNote: {
-    fontSize: 12,
-    color: "#a0aec0",
-    textAlign: "center",
-    fontStyle: "italic",
-  },
-  // Download Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalContent: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 32,
-    alignItems: "center",
-    width: width * 0.8,
-  },
-  modalText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#2d3748",
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  modalSubtext: {
-    fontSize: 14,
-    color: "#718096",
-    textAlign: "center",
   },
 });
 

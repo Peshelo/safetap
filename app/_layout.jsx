@@ -8,8 +8,8 @@ import 'react-native-reanimated';
 import './global.css';
 
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
+// // Prevent the splash screen from auto-hiding before asset loading is complete.
+// SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   // const [loaded] = useFonts({
@@ -31,7 +31,7 @@ export default function RootLayout() {
 
   return (
       <Stack>
-                        <Stack.Screen name="(tabs)/reports" options={{ headerShown: false }} />
+                        <Stack.Screen name="(tabs)/services" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)/contacts" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 

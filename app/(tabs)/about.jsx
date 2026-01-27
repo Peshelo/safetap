@@ -6,26 +6,22 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  Switch,
   Image,
+  Linking,
 } from "react-native";
-import { MaterialIcons, FontAwesome, Ionicons } from "@expo/vector-icons";
+import { MaterialIcons, Ionicons, Feather } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
 import { TextInput } from "react-native";
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import CustomHeader from "../components/Header";
 import { useNavigation } from "@react-navigation/native";
 
 const About = () => {
   const navigation = useNavigation();
+  const router = useRouter();
+  
   const [userInfo, setUserInfo] = useState({
-    // name: '',
-    // bloodType: '',
-    // allergies: '',
-    emergencyContact: "",
-    // medicalConditions: '',
-    // includeInAlerts: false
+    emergencyContact: '',
   });
   const [isEditing, setIsEditing] = useState(false);
 
@@ -35,7 +31,10 @@ const About = () => {
       try {
         const savedInfo = await SecureStore.getItemAsync("userEmergencyInfo");
         if (savedInfo) {
-          setUserInfo(JSON.parse(savedInfo));
+          const parsedInfo = JSON.parse(savedInfo);
+          setUserInfo({
+            emergencyContact: parsedInfo.emergencyContact || '',
+          });
         }
       } catch (error) {
         console.error("Failed to load user info", error);
@@ -75,12 +74,7 @@ const About = () => {
             try {
               await SecureStore.deleteItemAsync("userEmergencyInfo");
               setUserInfo({
-                // name: '',
-                // bloodType: '',
-                // allergies: '',
-                emergencyContact: "",
-                // medicalConditions: '',
-                // includeInAlerts: false
+                emergencyContact: '',
               });
               Alert.alert("Success", "Your information has been deleted");
             } catch (error) {
@@ -92,323 +86,475 @@ const About = () => {
     );
   };
 
+  // Menu sections (commented out for now)
+  /*
+  const menuSections = [
+    {
+      title: "Dashboard",
+      icon: "dashboard",
+      color: "#007AFF",
+      onPress: () => navigation.navigate("dashboard"),
+    },
+    {
+      title: "Information & Procedures",
+      icon: "info",
+      color: "#34C759",
+      onPress: () => navigation.navigate("information"),
+    },
+    {
+      title: "Change Language",
+      icon: "language",
+      color: "#AF52DE",
+      onPress: () => {
+        Alert.alert(
+          "Language Settings",
+          "Select your preferred language",
+          [
+            { text: "English", onPress: () => {} },
+            { text: "Shona", onPress: () => {} },
+            { text: "Ndebele", onPress: () => {} },
+            { text: "Cancel", style: "cancel" }
+          ]
+        );
+      },
+    },
+    {
+      title: "Walkthrough",
+      icon: "directions-walk",
+      color: "#FF9500",
+      onPress: () => navigation.navigate("walkthrough"),
+    },
+    {
+      title: "Report Criminal Complaint",
+      icon: "report",
+      color: "#FF3B30",
+      onPress: () => navigation.navigate("report"),
+    },
+    {
+      title: "About Us",
+      icon: "groups",
+      color: "#5856D6",
+      onPress: () => navigation.navigate("about-us"),
+    },
+  ];
+  */
+
+  // App info section
+  const appInfoSection = [
+    {
+      title: "Privacy Policy",
+      icon: "policy",
+      color: "#8E8E93",
+      onPress: () => Linking.openURL("https://zrp.gov.zw/privacy"),
+    },
+    {
+      title: "Terms of Service",
+      icon: "description",
+      color: "#8E8E93",
+      onPress: () => Linking.openURL("https://zrp.gov.zw/terms"),
+    },
+    {
+      title: "Help & Support",
+      icon: "help",
+      color: "#8E8E93",
+      // onPress: () => navigation.navigate("support"),
+    },
+  ];
+
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
-    >
-      <Stack.Screen
-        options={{
-          headerShown: false, // Hide default header since we're using custom header
-        }}
-      />
+    <View style={styles.container}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <StatusBar barStyle="light-content" backgroundColor="#1E3A8A" />
 
-      <CustomHeader
-        title="About"
-        subtitle="Information about ZRP SafeTap"
-        onBack={() => navigation.goBack()}
-        showBackButton={true}
-        showLogo={false}
-      />
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>About SafetyTap</Text>
-        <Text style={styles.sectionText}>
-          SafeTap connects Zimbabweans to police services for fast emergency
-          reporting and crime prevention.
-        </Text>
-        <Text style={styles.sectionText}>Version 1.0.0 {"\n"}</Text>
-        {/* <Text style={styles.sectionText}>
-NB: Data about your Emergency Profile will not be secured stored on your device. It will not be shared with any        </Text> */}
+      {/* Header matching other pages */}
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Settings</Text>
+        <View style={styles.headerRight} />
       </View>
 
-      {/* Emergency Profile Section */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Emergency Profile</Text>
-          {!isEditing ? (
-            <TouchableOpacity onPress={() => setIsEditing(true)}>
-              <MaterialIcons name="edit" size={24} color="#3B82F6" />
-            </TouchableOpacity>
+      <ScrollView 
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* App Information */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>About</Text>
+          
+          <View style={styles.appInfo}>
+            <Image
+              source={require("../../assets/images/logo-alternate.png")}
+              style={styles.appLogo}
+            />
+            <View style={styles.appInfoContent}>
+              <Text style={styles.appName}>SafeTap</Text>
+              <Text style={styles.appSubtitle}>Zimbabwe Republic Police</Text>
+              <Text style={styles.appVersion}>Version 1.0.0</Text>
+            </View>
+          </View>
+
+          <Text style={styles.appDescription}>
+            SafeTap connects Zimbabweans to police services for fast emergency reporting and crime prevention.
+          </Text>
+        </View>
+
+        {/* Emergency Contact Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Emergency Contact</Text>
+            {!isEditing ? (
+              <TouchableOpacity onPress={() => setIsEditing(true)}>
+                <Feather name="edit" size={20} color="#1E3A8A" />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity onPress={saveUserInfo}>
+                <Ionicons name="checkmark" size={24} color="#059669" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {isEditing ? (
+            <View style={styles.editSection}>
+              <TextInput
+                style={styles.input}
+                placeholder="Emergency Contact Number (e.g. 0777723454)"
+                value={userInfo.emergencyContact}
+                onChangeText={(text) => handleInputChange("emergencyContact", text)}
+                keyboardType="phone-pad"
+              />
+              <View style={styles.buttonRow}>
+                <TouchableOpacity 
+                  style={styles.cancelButton}
+                  onPress={() => setIsEditing(false)}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.saveButton}
+                  onPress={saveUserInfo}
+                >
+                  <Text style={styles.saveButtonText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           ) : (
-            <TouchableOpacity onPress={saveUserInfo}>
-              <Ionicons name="checkmark-done" size={24} color="#10B981" />
-            </TouchableOpacity>
+            <View style={styles.infoSection}>
+              <View style={styles.infoRow}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="call" size={20} color="#1E3A8A" />
+                </View>
+                <View style={styles.infoContent}>
+                  <Text style={styles.infoLabel}>Emergency Contact</Text>
+                  <Text style={styles.infoValue}>
+                    {userInfo.emergencyContact || "Not set"}
+                  </Text>
+                </View>
+              </View>
+              {userInfo.emergencyContact && (
+                <TouchableOpacity 
+                  style={styles.resetButton}
+                  onPress={resetUserInfo}
+                >
+                  <Ionicons name="trash-outline" size={18} color="#DC2626" />
+                  <Text style={styles.resetButtonText}>Clear Contact</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           )}
         </View>
 
-        {isEditing ? (
-          <>
-            {/* <TextInput
-              style={styles.input}
-              placeholder="Full Name"
-              value={userInfo.name}
-              onChangeText={(text) => handleInputChange('name', text)}
-            /> */}
-            {/* <TextInput
-              style={styles.input}
-              placeholder="Blood Type (e.g., O+)"
-              value={userInfo.bloodType}
-              onChangeText={(text) => handleInputChange('bloodType', text)}
-            /> */}
-            {/* <TextInput
-              style={styles.input}
-              placeholder="Allergies"
-              value={userInfo.allergies}
-              onChangeText={(text) => handleInputChange('allergies', text)}
-            /> */}
-            <TextInput
-              style={styles.input}
-              placeholder="Emergency Contact Number (e.g. 0777723454)"
-              value={userInfo.emergencyContact}
-              onChangeText={(text) =>
-                handleInputChange("emergencyContact", text)
-              }
-              keyboardType="phone-pad"
-            />
-            {/* <TextInput
-              style={[styles.input, { height: 80 }]}
-              placeholder="Medical Conditions"
-              value={userInfo.medicalConditions}
-              onChangeText={(text) => handleInputChange('medicalConditions', text)}
-              multiline
-            /> */}
-            {/* <View style={styles.switchContainer}>
-              <Text style={styles.switchLabel}>Include in emergency alerts</Text>
-              <Switch
-                value={userInfo.includeInAlerts}
-                onValueChange={(value) => handleInputChange('includeInAlerts', value)}
-                trackColor={{ false: '#E5E7EB', true: '#3B82F6' }}
-                thumbColor="#FFFFFF"
-              />
-            </View> */}
-          </>
-        ) : (
-          <>
-            {userInfo.emergencyContact ? (
-              <>
-                {/* <InfoRow icon="person" label="Name" value={userInfo.name} /> */}
-                {/* <InfoRow icon="bloodtype" label="Blood Type" value={userInfo.bloodType} /> */}
-                {/* <InfoRow icon="warning" label="Allergies" value={userInfo.allergies} /> */}
-                <InfoRow
-                  icon="phone"
-                  label="Emergency Contact"
-                  value={userInfo.emergencyContact}
-                />
-                {/* <InfoRow icon="medical-services" label="Medical Conditions" value={userInfo.medicalConditions} /> */}
-                {/* <InfoRow 
-                  icon="notifications" 
-                  label="Include in alerts" 
-                  value={userInfo.includeInAlerts ? 'Yes' : 'No'} 
-                /> */}
-              </>
-            ) : (
-              <Text style={styles.emptyText}>
-                No emergency contact set up yet
-              </Text>
-            )}
-          </>
-        )}
+        {/* Features Section - Commented out for now */}
+        {/*
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Features</Text>
+          {menuSections.map((item, index) => (
+            <TouchableOpacity
+              key={index}
+              style={styles.listItem}
+              onPress={item.onPress}
+            >
+              <View style={[styles.listIcon, { backgroundColor: `${item.color}15` }]}>
+                <MaterialIcons name={item.icon} size={20} color={item.color} />
+              </View>
+              <Text style={styles.listText}>{item.title}</Text>
+              <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+            </TouchableOpacity>
+          ))}
+        </View>
+        */}
 
-        <TouchableOpacity
-          style={
-            userInfo.emergencyContact ? styles.resetButton : styles.addButton
-          }
-          onPress={
-            userInfo.emergencyContact ? resetUserInfo : () => setIsEditing(true)
-          }
-        >
-          {userInfo.emergencyContact ? (
-            <Text style={styles.resetButtonText}>
-              {userInfo.emergencyContact
-                ? "Reset All Information"
-                : "Clear Storage"}
-            </Text>
-          ) : (
-            <Text style={styles.addButtonText}>Add emergency contact</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+        {/* App Info Links */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Information</Text>
+          {appInfoSection.map((item, index) => (
+            <TouchableOpacity
+              key={index}
+              style={styles.listItem}
+              onPress={item.onPress}
+            >
+              <View style={[styles.listIcon, { backgroundColor: "#F3F4F6" }]}>
+                <MaterialIcons name={item.icon} size={20} color="#6B7280" />
+              </View>
+              <Text style={styles.listText}>{item.title}</Text>
+              <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+            </TouchableOpacity>
+          ))}
+        </View>
 
-      {/* Additional Options */}
-      {/* <View style={styles.section}>
-        <Text style={styles.sectionTitle}>More Options</Text>
+        {/* Footer */}
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>© 2026 Zimbabwe Republic Police</Text>
+          <Text style={styles.footerSubtext}>www.zrp.gov.zw</Text>
+        </View>
         
-        <OptionButton 
-          icon="history" 
-          label="Emergency History" 
-          onPress={() => Alert.alert('Coming Soon', 'This feature will show your emergency history')}
-        />
-        <OptionButton 
-          icon="share" 
-          label="Share App" 
-          onPress={() => Alert.alert('Coming Soon', 'This will let you share the app with others')}
-        />
-        <OptionButton 
-          icon="settings" 
-          label="App Settings" 
-          onPress={() => Alert.alert('Coming Soon', 'This will open app settings')}
-        />
-        <OptionButton 
-          icon="help" 
-          label="Help & Support" 
-          onPress={() => Alert.alert('Coming Soon', 'This will open help center')}
-        />
-        <OptionButton 
-          icon="privacy-tip" 
-          label="Privacy Policy" 
-          onPress={() => Alert.alert('Coming Soon', 'This will show privacy policy')}
-        />
-      </View> */}
-    </ScrollView>
+        {/* Footer Spacing */}
+        <View style={styles.footerSpacing} />
+      </ScrollView>
+    </View>
   );
 };
-
-const InfoRow = ({ icon, label, value }) => (
-  <View style={styles.infoRow}>
-    <View style={styles.infoIcon}>
-      <MaterialIcons name={icon} size={20} color="#6B7280" />
-    </View>
-    <View style={styles.infoTextContainer}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value || "Not specified"}</Text>
-    </View>
-  </View>
-);
-
-const OptionButton = ({ icon, label, onPress }) => (
-  <TouchableOpacity style={styles.optionButton} onPress={onPress}>
-    <MaterialIcons name={icon} size={24} color="#3B82F6" />
-    <Text style={styles.optionButtonText}>{label}</Text>
-    <MaterialIcons name="chevron-right" size={24} color="#9CA3AF" />
-  </TouchableOpacity>
-);
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#f8fafc",
   },
-  contentContainer: {
-    paddingBottom: 32,
+  // Header matching other pages
+  header: {
+    backgroundColor: "#1E3A8A",
+    paddingTop: 50,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+  headerRight: {
+    width: 40,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 20,
   },
   section: {
-    backgroundColor: "white",
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 16,
-    marginTop: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    backgroundColor: "#FFFFFF",
+    marginTop: 8,
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
   },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "600",
     color: "#111827",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
   },
-  sectionText: {
-    fontSize: 14,
-    color: "#6B7280",
-    marginBottom: 8,
-    lineHeight: 20,
+  editSection: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
   },
   input: {
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#f9fafb",
     borderRadius: 8,
     padding: 12,
-    marginBottom: 12,
-    fontSize: 15,
+    fontSize: 16,
     color: "#111827",
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#e5e7eb",
+  },
+  buttonRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  cancelButton: {
+    flex: 1,
+    padding: 12,
+    backgroundColor: "#f3f4f6",
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+  saveButton: {
+    flex: 1,
+    padding: 12,
+    backgroundColor: "#1E3A8A",
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+  infoSection: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
   },
   infoRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
+    marginBottom: 16,
   },
   infoIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#F3F4F6",
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: "#eff6ff",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
   },
-  infoTextContainer: {
+  infoContent: {
     flex: 1,
   },
   infoLabel: {
-    fontSize: 13,
+    fontSize: 14,
     color: "#6B7280",
+    marginBottom: 2,
   },
   infoValue: {
-    fontSize: 15,
-    color: "#111827",
-    fontWeight: "500",
-    marginTop: 2,
-  },
-  emptyText: {
-    color: "#9CA3AF",
-    textAlign: "center",
-    paddingVertical: 16,
-  },
-  switchContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 8,
-  },
-  switchLabel: {
-    fontSize: 15,
-    color: "#111827",
-  },
-  resetButton: {
-    marginTop: 16,
-    padding: 12,
-    backgroundColor: "#FEF2F2",
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  addButton: {
-    marginTop: 16,
-    padding: 12,
-    backgroundColor: "#E0F2FE",
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  addButtonText: {
-    color: "#3B82F6",
-    fontWeight: "600",
-  },
-  resetButtonText: {
-    color: "#DC2626",
-    fontWeight: "600",
-  },
-  optionButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
-  },
-  optionButtonText: {
-    flex: 1,
     fontSize: 16,
     color: "#111827",
-    marginLeft: 12,
+    fontWeight: "500",
+  },
+  resetButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 12,
+    backgroundColor: "#fef2f2",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#fee2e2",
+  },
+  resetButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#DC2626",
+  },
+  listItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  listIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  listText: {
+    flex: 1,
+    fontSize: 16,
+    color: "#374151",
+  },
+  appInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  appLogo: {
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+    marginRight: 16,
+  },
+  appInfoContent: {
+    flex: 1,
+  },
+  appName: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 2,
+  },
+  appSubtitle: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginBottom: 4,
+  },
+  appVersion: {
+    fontSize: 13,
+    color: "#9CA3AF",
+  },
+  appDescription: {
+    fontSize: 14,
+    color: "#6B7280",
+    lineHeight: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  footer: {
+    padding: 24,
+    alignItems: "center",
+    marginTop: 16,
+    marginBottom: 20,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#f1f5f9",
+  },
+  footerText: {
+    fontSize: 13,
+    color: "#6B7280",
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  footerSubtext: {
+    fontSize: 12,
+    color: "#9CA3AF",
+    textAlign: "center",
+  },
+  footerSpacing: {
+    height: 20,
   },
 });
 

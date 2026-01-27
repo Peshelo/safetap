@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import pb from "../../lib/connection";
 
-const NewsSummaryCard = ({ item, onPress }) => {
+const NewsSummaryCard = ({ item, onPress, showDescription = true }) => {
   const getFileUrl = (item) => {
     if (!item.file) return null;
     return pb.files.getURL(item, item.file);
@@ -17,74 +17,104 @@ const NewsSummaryCard = ({ item, onPress }) => {
     return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
   };
 
+  // Fallback image source
+  const fallbackImage = require("../../assets/images/fallback.png");
+
   return (
-    <TouchableOpacity style={styles.row} onPress={() => onPress?.(item)}>
-      {fileUrl ? (
-        <Image source={{ uri: fileUrl }} style={styles.image} />
-      ) : (
-        <View style={[styles.image, styles.placeholder]} />
-      )}
+    <TouchableOpacity style={styles.card} onPress={() => onPress?.(item)} activeOpacity={0.8}>
+      <View style={styles.imageContainer}>
+        <Image 
+          source={fileUrl ? { uri: fileUrl } : fallbackImage} 
+          style={styles.image}
+          defaultSource={fallbackImage}
+        />
+      </View>
+      
       <View style={styles.content}>
-        <Text style={styles.title} numberOfLines={2}>
-          {item.title}
-        </Text>
-        {item.description && (
-          <Text style={styles.description} numberOfLines={1}>
+        <View style={styles.dateContainer}>
+            <Ionicons name="time-outline" size={12} color="#6B7280" />
+            <Text style={styles.date}>{item.created}</Text>
+          </View>
+        <View style={styles.header}>
+          <Text style={styles.title} numberOfLines={2}>
+            {item.title}
+          </Text>
+          
+        </View>
+        
+        {showDescription && item.description && (
+          <Text style={styles.description} numberOfLines={2}>
             {item.description.replace(/<[^>]*>/g, "")}
           </Text>
         )}
-        <View style={styles.metaRow}>
-          <Ionicons name="time-outline" size={12} color="#6B7280" />
-          <Text style={styles.metaText}>{formatDate(item.created)}</Text>
-        </View>
       </View>
     </TouchableOpacity>
   );
 };
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-    backgroundColor: "#fff",
+  card: {
+    backgroundColor: "transparent",
+    // borderRadius: 12,
+    overflow: "hidden",
+    marginBottom: 12,
+    borderWidth: 0.5,
+    borderColor: "#E5E7EB",
+  },
+  imageContainer: {
+    width: "100%",
+    height: 160,
+    overflow: "hidden",
+      borderWidth:0.5,
+    borderColor:"lightgray",
   },
   image: {
-    width: 60,
-    height: 60,
-    borderRadius: 6,
-    marginRight: 12,
-    backgroundColor: "#F3F4F6",
-  },
-  placeholder: {
-    justifyContent: "center",
-    alignItems: "center",
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+    boxShadow: 'black',
+
+
+    borderRadius:5,
   },
   content: {
-    flex: 1,
+    padding: 16,
+    backgroundColor: "transparent",
   },
-  title: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#111827",
-    marginBottom: 2,
-  },
-  description: {
-    fontSize: 12,
-    color: "#6B7280",
+  header: {
+    flexDirection: "column",
+    // justifyContent: "space-between",
+    // alignItems: "flex-start",
     marginBottom: 4,
   },
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
+  title: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "500",
+    color: "#111827",
+    lineHeight: 20,
+    marginRight: 12,
   },
-  metaText: {
+  dateContainer: {
+    // flexDirection: "row",
+    // alignItems: "center",
+    // gap: 4,
+    // backgroundColor: "#F9FAFB",
+    // paddingHorizontal: 8,
+    // paddingVertical: 4,
+    // borderRadius: 6,
+    // borderWidth: 0.5,
+    // borderColor: "#E5E7EB",
+  },
+  date: {
     fontSize: 11,
     color: "#6B7280",
+    fontWeight: "500",
+  },
+  description: {
+    fontSize: 13,
+    color: "#6B7280",
+    lineHeight: 18,
   },
 });
 

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Text,
   View,
@@ -13,8 +13,8 @@ import {
 import { FontAwesome5, Ionicons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
 import { router, Stack, useLocalSearchParams } from "expo-router";
+import * as SecureStore from "expo-secure-store";
 import pb from "../../../lib/connection";
-import CustomHeader from "../../components/Header"; // Ensure this exists
 
 const commentTypes = [
   { label: "Comment", value: "COMMENT" },
@@ -30,6 +30,25 @@ const Case = () => {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [success, setSuccess] = useState(false);
+  const [userPhoneNumber, setUserPhoneNumber] = useState("");
+
+  // Load user's emergency contact phone number
+  useEffect(() => {
+    const loadUserPhoneNumber = async () => {
+      try {
+        const savedInfo = await SecureStore.getItemAsync("userEmergencyInfo");
+        if (savedInfo) {
+          const parsedInfo = JSON.parse(savedInfo);
+          if (parsedInfo.emergencyContact) {
+            setUserPhoneNumber(parsedInfo.emergencyContact);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load user phone number", error);
+      }
+    };
+    loadUserPhoneNumber();
+  }, []);
 
   const validate = () => {
     const newErrors = {};
@@ -50,6 +69,9 @@ const Case = () => {
         comment: message,
         flag: commentType,
         case: params.case || "general",
+        user_phone: userPhoneNumber || null, // Include user's phone number if available
+        timestamp: new Date().toISOString(),
+        status: "pending",
       };
 
       await pb.collection("comments").create(data);
@@ -59,7 +81,6 @@ const Case = () => {
         "Success",
         `Your ${commentType.toLowerCase()} has been submitted successfully!`
       );
-      router.replace("/(tabs)/reports");
     } catch (error) {
       console.error("Submission error:", error);
       Alert.alert("Error", "Failed to submit. Please try again.");
@@ -74,115 +95,214 @@ const Case = () => {
     setErrors({});
   };
 
+  const handlePhoneNumberUpdate = async () => {
+    Alert.alert(
+      "Update Phone Number",
+      "To update your phone number, please go to Settings and update your emergency contact information.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Go to Settings", 
+          onPress: () => router.push("/about")
+        }
+      ]
+    );
+  };
+
   if (success) {
     return (
       <View style={styles.successContainer}>
-        <Stack.Screen options={{ title: "Submitted" }} />
+        <Stack.Screen options={{ headerShown: false }} />
+        <StatusBar barStyle="dark-content" backgroundColor="#f8fafc" />
+        
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>
+              {params?.case ? `Report ${params.case}` : "Feedback Submitted"}
+            </Text>
+            <Text style={styles.headerSubtitle}>
+              Zimbabwe Republic Police
+            </Text>
+          </View>
+        </View>
+
         <View style={styles.successCard}>
           <View style={styles.successHeader}>
             <View style={styles.successIconContainer}>
-              <FontAwesome5 name="check" size={32} color="#22c55e" />
+              <FontAwesome5 name="check-circle" size={48} color="#059669" />
             </View>
             <Text style={styles.successTitle}>Thank You!</Text>
             <Text style={styles.successSubtitle}>
               Your {commentType.toLowerCase()} has been submitted
             </Text>
+            <Text style={styles.successMessage}>
+              We appreciate your feedback and will review it shortly.
+            </Text>
           </View>
 
-          <TouchableOpacity
-            style={[styles.button, styles.successButton]}
-            onPress={() => setSuccess(false)}
-          >
-            <Text style={styles.buttonText}>Submit Another</Text>
-          </TouchableOpacity>
+          <View style={styles.successButtons}>
+            <TouchableOpacity
+              style={[styles.button, styles.primaryButton]}
+              onPress={() => setSuccess(false)}
+            >
+              <FontAwesome5 name="plus" size={16} color="#FFFFFF" />
+              <Text style={styles.buttonText}>Submit Another</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.button, styles.secondaryButton]}
+              onPress={() => router.replace("/(tabs)/services")}
+            >
+              <FontAwesome5 name="home" size={16} color="#1E3A8A" />
+              <Text style={styles.secondaryButtonText}>Go to Services</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#f8fafc" }}>
+    <View style={styles.container}>
+      <Stack.Screen options={{ headerShown: false }} />
       <StatusBar barStyle="dark-content" backgroundColor="#f8fafc" />
 
-      {/* Custom header */}
-      <CustomHeader
-        title={params?.case ? `Report ${params.case}` : "Submit Feedback"}
-        subtitle="Zimbabwe Republic Police"
-        showBackButton={true}
-        showLogo={true}
-        onBack={() => router.back()}
-      />
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+        <View style={styles.headerContent}>
+          <Text style={styles.headerTitle}>
+            {params?.case ? `Report ${params.case}` : "Submit Feedback"}
+          </Text>
+          <Text style={styles.headerSubtitle}>
+            Zimbabwe Republic Police
+          </Text>
+        </View>
+        <View style={styles.headerRight} />
+      </View>
 
       <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.contentContainer}
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Feedback Details</Text>
+        {/* Phone Number Info */}
+        {userPhoneNumber && (
+          <View style={styles.phoneInfoSection}>
+            <View style={styles.phoneInfoHeader}>
+              <View style={styles.phoneIconContainer}>
+                <Ionicons name="phone-portrait" size={20} color="#1E3A8A" />
+              </View>
+              <View style={styles.phoneInfoContent}>
+                <Text style={styles.phoneInfoLabel}>Your Contact Number</Text>
+                <Text style={styles.phoneInfoValue}>{userPhoneNumber}</Text>
+              </View>
+            </View>
+            <TouchableOpacity 
+              style={styles.updatePhoneButton}
+              onPress={handlePhoneNumberUpdate}
+            >
+              <Text style={styles.updatePhoneText}>Update Number</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
-          {/* Picker */}
-          <View style={styles.inputCard}>
-            <Text style={styles.inputLabel}>Type</Text>
-            <View style={styles.pickerWrapper}>
-              <Picker
-                selectedValue={commentType}
-                onValueChange={(itemValue) => setCommentType(itemValue)}
-                dropdownIconColor="#64748b"
-                style={{ color: "#0f172a" }} // make selected text visible
-              >
-                {commentTypes.map((type) => (
-                  <Picker.Item
-                    key={type.value}
-                    label={type.label}
-                    value={type.value}
-                    color="#0f172a" // ensure picker options visible
-                  />
-                ))}
-              </Picker>
+        {/* Feedback Form */}
+        <View style={styles.formSection}>
+          <Text style={styles.sectionTitle}>Feedback Details</Text>
+          <View style={styles.formCard}>
+            
+            {/* Picker */}
+            <View style={styles.formGroup}>
+              <Text style={styles.inputLabel}>Feedback Type</Text>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={commentType}
+                  onValueChange={(itemValue) => {
+                    setCommentType(itemValue);
+                    setErrors({});
+                  }}
+                  dropdownIconColor="#6B7280"
+                  style={styles.picker}
+                >
+                  {commentTypes.map((type) => (
+                    <Picker.Item
+                      key={type.value}
+                      label={type.label}
+                      value={type.value}
+                      color="#111827"
+                    />
+                  ))}
+                </Picker>
+              </View>
             </View>
 
-            {/* Message */}
-            <Text style={styles.inputLabel}>Message</Text>
-            <TextInput
+            {/* Message Input */}
+            <View style={styles.formGroup}>
+              <Text style={styles.inputLabel}>Your Message</Text>
+              <TextInput
+                style={[
+                  styles.textInput,
+                  errors.message && styles.inputError,
+                ]}
+                placeholder={`Enter your ${commentType.toLowerCase()} here...`}
+                placeholderTextColor="#9CA3AF"
+                multiline
+                numberOfLines={6}
+                textAlignVertical="top"
+                value={message}
+                onChangeText={(text) => {
+                  setMessage(text);
+                  if (errors.message) setErrors({});
+                }}
+              />
+              {errors.message && (
+                <Text style={styles.errorText}>{errors.message}</Text>
+              )}
+            </View>
+
+            {/* Note */}
+            <View style={styles.noteContainer}>
+              <Ionicons name="information-circle" size={16} color="#6B7280" />
+              <Text style={styles.noteText}>
+                Note: Your feedback is anonymous. We do not store or share any personal details.
+              </Text>
+            </View>
+
+            {/* Submit Button */}
+            <TouchableOpacity
               style={[
-                styles.textArea,
-                errors.message && styles.inputError,
+                styles.submitButton,
+                loading && styles.submitButtonDisabled,
               ]}
-              placeholder={`Enter your ${commentType.toLowerCase()} here...`}
-              placeholderTextColor="#64748b"
-              multiline
-              value={message}
-              onChangeText={setMessage}
-            />
-            {errors.message && (
-              <Text style={styles.errorText}>{errors.message}</Text>
-            )}
+              onPress={handleSubmit}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <>
+                  <FontAwesome5
+                    name="paper-plane"
+                    size={16}
+                    color="#FFFFFF"
+                    style={styles.buttonIcon}
+                  />
+                  <Text style={styles.submitButtonText}>Submit Feedback</Text>
+                </>
+              )}
+            </TouchableOpacity>
           </View>
-
-          <Text style={styles.noteText}>
-            Note: We do not store or share any personal details you provide.
-          </Text>
-
-          <TouchableOpacity
-            style={[styles.submitButton, loading && styles.disabledButton]}
-            onPress={handleSubmit}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <>
-                <FontAwesome5
-                  name="paper-plane"
-                  size={16}
-                  color="white"
-                  style={{ marginRight: 8 }}
-                />
-                <Text style={styles.buttonText}>Submit</Text>
-              </>
-            )}
-          </TouchableOpacity>
         </View>
+
+        {/* Footer Spacing */}
+        <View style={styles.footerSpacing} />
       </ScrollView>
     </View>
   );
@@ -191,123 +311,275 @@ const Case = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#f8fafc",
   },
-  contentContainer: {
-    padding: 20,
+  // Header Styles
+  header: {
+    backgroundColor: "#1E3A8A",
+    paddingTop: 50,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
-  section: {
-    marginBottom: 24,
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerContent: {
+    flex: 1,
+    marginHorizontal: 12,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#FFFFFF",
+    textAlign: "center",
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: "rgba(255, 255, 255, 0.9)",
+    textAlign: "center",
+    marginTop: 2,
+  },
+  headerRight: {
+    width: 40,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 20,
+  },
+  // Phone Info Section
+  phoneInfoSection: {
+    backgroundColor: "#FFFFFF",
+    marginTop: 8,
+    marginHorizontal: 16,
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  phoneInfoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  phoneIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: "#EFF6FF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  phoneInfoContent: {
+    flex: 1,
+  },
+  phoneInfoLabel: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginBottom: 2,
+  },
+  phoneInfoValue: {
+    fontSize: 16,
+    color: "#111827",
+    fontWeight: "500",
+  },
+  updatePhoneButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 6,
+    marginLeft: 12,
+  },
+  updatePhoneText: {
+    fontSize: 12,
+    color: "#1E3A8A",
+    fontWeight: "500",
+  },
+  // Form Section
+  formSection: {
+    marginTop: 16,
+    paddingHorizontal: 16,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#0f172a",
-    marginBottom: 16,
+    color: "#111827",
+    marginBottom: 12,
   },
-  inputCard: {
-    backgroundColor: "white",
+  formCard: {
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     padding: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  formGroup: {
     marginBottom: 16,
   },
   inputLabel: {
+    fontSize: 14,
     fontWeight: "500",
-    color: "#334155",
+    color: "#374151",
     marginBottom: 8,
   },
-  pickerWrapper: {
-    backgroundColor: "#f8fafc",
+  pickerContainer: {
+    backgroundColor: "#F9FAFB",
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
-    marginBottom: 16,
+    borderColor: "#E5E7EB",
+    overflow: "hidden",
   },
-  textArea: {
+  picker: {
+    height: 50,
+    color: "#111827",
+  },
+  textInput: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    padding: 12,
+    fontSize: 16,
+    color: "#111827",
     minHeight: 120,
     textAlignVertical: "top",
-    padding: 12,
-    backgroundColor: "#f8fafc",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    marginBottom: 4,
-    color: "#0f172a", // text visible
   },
   inputError: {
-    borderColor: "#ef4444",
+    borderColor: "#EF4444",
   },
   errorText: {
-    color: "#ef4444",
+    color: "#EF4444",
     fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
+  },
+  noteContainer: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: "#F3F4F6",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 20,
     marginTop: 4,
   },
   noteText: {
-    color: "#64748b",
     fontSize: 12,
-    textAlign: "center",
-    marginBottom: 16,
-    fontStyle: "italic",
+    color: "#6B7280",
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 16,
   },
   submitButton: {
-    backgroundColor: "#2563eb",
-    padding: 16,
-    borderRadius: 12,
+    backgroundColor: "#1E3A8A",
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 8,
     flexDirection: "row",
     justifyContent: "center",
+    alignItems: "center",
   },
-  disabledButton: {
+  submitButtonDisabled: {
     opacity: 0.7,
   },
-  buttonText: {
-    color: "white",
-    fontWeight: "bold",
+  buttonIcon: {
+    marginRight: 8,
   },
+  submitButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  // Success Screen Styles
   successContainer: {
     flex: 1,
     backgroundColor: "#f8fafc",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
   },
   successCard: {
-    backgroundColor: "white",
-    borderRadius: 16,
-    padding: 24,
-    width: "100%",
-    maxWidth: 400,
-    elevation: 3,
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
   },
   successHeader: {
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 32,
   },
   successIconContainer: {
-    backgroundColor: "#dcfce7",
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 20,
   },
   successTitle: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#166534",
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#059669",
     marginBottom: 8,
-  },
-  successSubtitle: {
-    color: "#64748b",
     textAlign: "center",
   },
-  button: {
-    padding: 16,
-    borderRadius: 12,
+  successSubtitle: {
+    fontSize: 16,
+    color: "#6B7280",
+    textAlign: "center",
     marginBottom: 12,
-    alignItems: "center",
   },
-  successButton: {
-    backgroundColor: "#22c55e",
+  successMessage: {
+    fontSize: 14,
+    color: "#9CA3AF",
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  successButtons: {
+    width: "100%",
+    maxWidth: 400,
+  },
+  button: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  primaryButton: {
+    backgroundColor: "#1E3A8A",
+  },
+  secondaryButton: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  buttonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
+    marginLeft: 8,
+  },
+  secondaryButtonText: {
+    color: "#1E3A8A",
+    fontSize: 16,
+    fontWeight: "600",
+    marginLeft: 8,
+  },
+  footerSpacing: {
+    height: 20,
   },
 });
 

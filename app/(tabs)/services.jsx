@@ -1,0 +1,684 @@
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  StatusBar,
+  Modal,
+  Linking,
+  Alert,
+  TextInput,
+} from "react-native";
+import React, { useState } from "react";
+import { Stack, useRouter } from "expo-router";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import '../global.css'
+
+const Services = () => {
+  const router = useRouter();
+  const [showComingSoonModal, setShowComingSoonModal] = useState(false);
+  const [comingSoonTitle, setComingSoonTitle] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSearch, setShowSearch] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [filterByAvailability, setFilterByAvailability] = useState("all");
+
+  // Social media links for ZRP (simplified)
+  const socialMediaLinks = [
+    {
+      id: "facebook",
+      name: "Facebook",
+      icon: "logo-facebook",
+      color: "#1877F2",
+      url: "https://www.facebook.com/ZimbabweRepublicPolice",
+    },
+    {
+      id: "twitter",
+      name: "Twitter",
+      icon: "logo-twitter",
+      color: "#1DA1F2",
+      url: "https://twitter.com/ZRPUnofficial",
+    },
+    {
+      id: "instagram",
+      name: "Instagram",
+      icon: "logo-instagram",
+      color: "#E4405F",
+      url: "https://www.instagram.com/zimbabwerepublicpolice",
+    },
+  ];
+
+  // Categorized services with availability flag
+  const serviceCategories = [
+    {
+      id: "emergency",
+      title: "Quick Access",
+      icon: "alert-circle",
+      color: "#DC2626",
+      services: [
+        {
+          id: 1,
+          title: "Find Police Station",
+          icon: "search",
+          description: "Search Police Station Directory",
+          available: true,
+          action: () => router.push("(tabs)/contacts"),
+          badge: "MOST USED",
+        },
+        {
+          id: 3,
+          title: "News and Press Releases",
+          icon: "news",
+          description: "Get the latest news and press releases",
+          available: true,
+          action: () => router.push("/(tabs)/news"),
+        },
+        {
+          id: 4,
+          title: "Suggestion Box",
+          icon: "archive",
+          description: "Give Feedback",
+          available: true,
+          action: () => router.push("/report/complaint"),
+        },
+      ],
+    },
+    {
+      id: "reporting",
+      title: "Reporting",
+      icon: "document-text",
+      color: "#1E3A8A",
+      services: [
+        {
+          id: 5,
+          title: "Crime Report",
+          icon: "shield-checkmark",
+          description: "File criminal reports",
+          available: true,
+          action: () => router.push("/report/crime"),
+        },
+        {
+          id: 6,
+          title: "Traffic Accident",
+          icon: "car",
+          description: "Report road accidents",
+          available: true,
+          action: () => router.push("/report/accident"),
+        },
+        {
+          id: 7,
+          title: "Lost Property",
+          icon: "search",
+          description: "Report lost items",
+          available: false,
+          action: () => showComingSoon("Lost Property"),
+        },
+        {
+          id: 8,
+          title: "Noise Complaint",
+          icon: "volume-high",
+          description: "Report disturbances",
+          available: false,
+          action: () => showComingSoon("Noise Complaint"),
+        },
+      ],
+    },
+    {
+      id: "services",
+      title: "Services",
+      icon: "construct",
+      color: "#059669",
+      services: [
+        {
+          id: 10,
+          title: "Police Clearance",
+          icon: "badge",
+          description: "Apply for clearance",
+          available: false,
+          action: () => router.push("/services/clearance"),
+        },
+        {
+          id: 11,
+          title: "Feedback",
+          icon: "chatbubble",
+          description: "Service feedback",
+          available: false,
+          action: () => showComingSoon("Feedback"),
+        },
+        {
+          id: 12,
+          title: "Community Watch",
+          icon: "eye",
+          description: "Neighborhood watch",
+          available: false,
+          action: () => showComingSoon("Community Watch"),
+        },
+        {
+          id: 13,
+          title: "Crime Prevention",
+          icon: "shield",
+          description: "Safety tips",
+          available: false,
+          action: () => showComingSoon("Crime Prevention"),
+        },
+      ],
+    },
+    {
+      id: "information",
+      title: "Information",
+      icon: "information-circle",
+      color: "#7C3AED",
+      services: [
+             {
+          id: 2,
+          title: "Search Police Station",
+          icon: "call",
+          description: "Police Station Details",
+          available: true,
+          action: () => router.push("/(tabs)/contacts"),
+        },
+        {
+          id: 14,
+          title: "Police Stations",
+          icon: "location",
+          description: "Find nearby stations",
+          available: true,
+          action: () => router.push("/maps"),
+        },
+        {
+          id: 15,
+          title: "Wanted Persons",
+          icon: "search",
+          description: "View wanted alerts",
+          available: false,
+          action: () => showComingSoon("Wanted Persons"),
+        },
+        {
+          id: 16,
+          title: "Traffic Updates",
+          icon: "traffic-light",
+          description: "Road conditions",
+          available: false,
+          action: () => showComingSoon("Traffic Updates"),
+        },
+        {
+          id: 17,
+          title: "Contact Directory",
+          icon: "call",
+          description: "Police contacts",
+          available: false,
+          action: () => showComingSoon("Contact Directory"),
+        },
+      ],
+    },
+    {
+      id: "digital",
+      title: "Digital",
+      icon: "laptop",
+      color: "#F59E0B",
+      services: [
+        {
+          id: 18,
+          title: "Cyber Crime",
+          icon: "globe",
+          description: "Report online crimes",
+          available: false,
+          action: () => showComingSoon("Cyber Crime"),
+        },
+        {
+          id: 19,
+          title: "Case Status",
+          icon: "time",
+          description: "Track your reports",
+          available: false,
+          action: () => showComingSoon("Case Status"),
+        },
+        {
+          id: 20,
+          title: "Appointment",
+          icon: "calendar",
+          description: "Schedule visits",
+          available: false,
+          action: () => showComingSoon("Appointment Booking"),
+        },
+        {
+          id: 21,
+          title: "Digital Evidence",
+          icon: "camera",
+          description: "Submit evidence",
+          available: false,
+          action: () => showComingSoon("Digital Evidence"),
+        },
+      ],
+    },
+  ];
+
+  const showComingSoon = (title) => {
+    setComingSoonTitle(title);
+    setShowComingSoonModal(true);
+  };
+
+  const handleServicePress = (service) => {
+    if (service.action) {
+      service.action();
+    } else if (!service.available) {
+      showComingSoon(service.title);
+    }
+  };
+
+  const openSocialMedia = (url) => {
+    Linking.openURL(url).catch(() => {
+      Alert.alert("Error", "Could not open the link");
+    });
+  };
+
+  const renderIcon = (iconName, color, size = 20) => {
+    const iconMappings = {
+      // Ionicons
+      alert: (size, color) => <Ionicons name="alert-circle" size={size} color={color} />,
+      document: (size, color) => <Ionicons name="document-text" size={size} color={color} />,
+      location: (size, color) => <Ionicons name="location" size={size} color={color} />,
+      call: (size, color) => <Ionicons name="call" size={size} color={color} />,
+      medical: (size, color) => <Ionicons name="medkit" size={size} color={color} />,
+      search: (size, color) => <Ionicons name="search" size={size} color={color} />,
+      shield: (size, color) => <Ionicons name="shield" size={size} color={color} />,
+      badge: (size, color) => <Ionicons name="ribbon" size={size} color={color} />,
+      chat: (size, color) => <Ionicons name="chatbubble" size={size} color={color} />,
+      eye: (size, color) => <Ionicons name="eye" size={size} color={color} />,
+      traffic: (size, color) => <Ionicons name="traffic-light" size={size} color={color} />,
+      globe: (size, color) => <Ionicons name="globe" size={size} color={color} />,
+      time: (size, color) => <Ionicons name="time" size={size} color={color} />,
+      calendar: (size, color) => <Ionicons name="calendar" size={size} color={color} />,
+      camera: (size, color) => <Ionicons name="camera" size={size} color={color} />,
+      volume: (size, color) => <Ionicons name="volume-high" size={size} color={color} />,
+      car: (size, color) => <Ionicons name="car" size={size} color={color} />,
+      laptop: (size, color) => <Ionicons name="laptop" size={size} color={color} />,
+      construct: (size, color) => <Ionicons name="construct" size={size} color={color} />,
+      info: (size, color) => <Ionicons name="information-circle" size={size} color={color} />,
+      
+      // MaterialCommunityIcons for specific icons
+      sos: (size, color) => <MaterialCommunityIcons name="sos" size={size} color={color} />,
+      flame: (size, color) => <Ionicons name="flame" size={size} color={color} />,
+    };
+
+    const iconRenderer = iconMappings[iconName];
+    return iconRenderer ? iconRenderer(size, color) : <Ionicons name="help-circle" size={size} color={color} />;
+  };
+
+  // Filter services based on search and category
+  const getFilteredCategories = () => {
+    return serviceCategories
+      .filter(category => selectedCategory === "all" || category.id === selectedCategory)
+      .map(category => ({
+        ...category,
+        services: category.services.filter(service => {
+          // Search filter
+          const matchesSearch = searchQuery === "" || 
+            service.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            service.description.toLowerCase().includes(searchQuery.toLowerCase());
+          
+          // Availability filter
+          const matchesAvailability = 
+            filterByAvailability === "all" ||
+            (filterByAvailability === "available" && service.available) ||
+            (filterByAvailability === "coming_soon" && !service.available);
+          
+          return matchesSearch && matchesAvailability;
+        })
+      }))
+      .filter(category => category.services.length > 0);
+  };
+
+  const filteredCategories = getFilteredCategories();
+
+  const renderServiceItem = (service, category) => (
+    <TouchableOpacity
+      key={service.id}
+      className={`flex-row items-center justify-between px-4 py-3.5 border-b border-gray-200 ${!service.available && 'opacity-60'}`}
+      onPress={() => handleServicePress(service)}
+      activeOpacity={0.7}
+      disabled={!service.available}
+    >
+      <View className="flex-row items-center flex-1">
+        <View 
+          className="w-9 h-9 rounded-lg justify-center items-center mr-3"
+          style={{ backgroundColor: service.available ? `${category.color}15` : '#E5E7EB' }}
+        >
+          {renderIcon(service.icon, service.available ? category.color : '#9CA3AF', 20)}
+        </View>
+        <View className="flex-1">
+          <Text className={`text-sm font-semibold ${!service.available ? 'text-gray-500' : 'text-gray-900'}`}>
+            {service.title}
+          </Text>
+          <Text className={`text-xs ${!service.available ? 'text-gray-400' : 'text-gray-600'}`}>
+            {service.description}
+          </Text>
+        </View>
+      </View>
+      {service.badge && (
+        <View 
+          className={`px-2 py-1 rounded mr-2 ${service.badge === "CRITICAL" ? 'bg-red-600' : 'bg-blue-900'}`}
+        >
+          <Text className="text-xs font-bold text-white">{service.badge}</Text>
+        </View>
+      )}
+      {!service.available && (
+        <View className="px-2 py-1 rounded mr-2 bg-gray-100 border border-gray-200">
+          <Text className="text-xs font-semibold text-gray-500">SOON</Text>
+        </View>
+      )}
+      <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+    </TouchableOpacity>
+  );
+
+  const renderCategory = (category) => (
+    <View key={category.id} className="mb-5">
+      <View className="flex-row items-center mb-3">
+        <View 
+          className="w-8 h-8 rounded-lg justify-center items-center mr-2"
+          style={{ backgroundColor: `${category.color}15` }}
+        >
+          {renderIcon(category.icon, category.color, 18)}
+        </View>
+        <Text className="text-base font-semibold text-gray-700">{category.title}</Text>
+        <Text className="text-sm text-gray-500 ml-1">({category.services.length})</Text>
+      </View>
+      <View className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+        {category.services.map(service => renderServiceItem(service, category))}
+      </View>
+    </View>
+  );
+
+  return (
+    <View className="flex-1 bg-gray-50">
+      <StatusBar barStyle="light-content" backgroundColor="#1E3A8A" />
+      <Stack.Screen options={{ headerShown: false }} />
+      
+      {/* Header */}
+      <View className="bg-blue-900 pt-12 pb-4 px-4">
+        <View className="flex-row items-center justify-between">
+          <TouchableOpacity 
+            className="w-10 h-10 rounded-full bg-white/20 justify-center items-center"
+            onPress={() => router.back()}
+          >
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text className="text-lg font-semibold text-white">Services</Text>
+          <TouchableOpacity 
+            className="w-10 h-10 rounded-full bg-white/20 justify-center items-center"
+            onPress={() => setShowSearch(!showSearch)}
+          >
+            <Ionicons name="search" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Search Bar */}
+      {showSearch && (
+        <View className="flex-row items-center px-4 py-3 bg-white border-b border-gray-200">
+          <View className="flex-1 flex-row items-center bg-gray-50 rounded-lg px-3 h-10 border border-gray-200 mr-3">
+            <Ionicons name="search" size={18} color="#6b7280" className="mr-2" />
+            <TextInput
+              className="flex-1 text-sm text-gray-900"
+              placeholder="Search services..."
+              placeholderTextColor="#9ca3af"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoFocus={true}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery("")}>
+                <Ionicons name="close-circle" size={18} color="#9ca3af" />
+              </TouchableOpacity>
+            )}
+          </View>
+          <TouchableOpacity 
+            className="px-3"
+            onPress={() => {
+              setShowSearch(false);
+              setSearchQuery("");
+            }}
+          >
+            <Text className="text-sm font-medium text-blue-900">Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Filters Section - Inline */}
+      <View className="bg-white border-b border-gray-200">
+        <View className="px-4 pt-3">
+          <Text className="text-sm font-semibold text-gray-700 mb-2">Filter Services</Text>
+          
+          {/* Category Filters */}
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            className="mb-3"
+          >
+            <TouchableOpacity
+              className={`px-3 py-1.5 rounded-full mr-2 ${selectedCategory === "all" ? 'bg-blue-50 border border-blue-200' : 'bg-gray-100 border border-gray-200'}`}
+              onPress={() => setSelectedCategory("all")}
+            >
+              <Text className={`text-sm ${selectedCategory === "all" ? 'text-blue-900 font-semibold' : 'text-gray-600'}`}>
+                All
+              </Text>
+            </TouchableOpacity>
+            {serviceCategories.map((cat) => (
+              <TouchableOpacity
+                key={cat.id}
+                className={`px-3 py-1.5 rounded-full mr-2 ${selectedCategory === cat.id ? 'bg-blue-50 border border-blue-200' : 'bg-gray-100 border border-gray-200'}`}
+                onPress={() => setSelectedCategory(cat.id)}
+              >
+                <Text className={`text-sm ${selectedCategory === cat.id ? 'text-blue-900 font-semibold' : 'text-gray-600'}`}>
+                  {cat.title}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* Availability Filters */}
+          <View className="flex-row mb-3">
+            {[
+              { key: "all", label: "All Services" },
+              { key: "available", label: "Available Now" },
+              { key: "coming_soon", label: "Coming Soon" },
+            ].map((opt) => (
+              <TouchableOpacity
+                key={opt.key}
+                className={`flex-1 mx-1 px-3 py-2 rounded-lg ${filterByAvailability === opt.key ? 'bg-blue-50 border border-blue-200' : 'bg-gray-100 border border-gray-200'}`}
+                onPress={() => setFilterByAvailability(opt.key)}
+              >
+                <View className="flex-row items-center justify-center">
+                  <Text className={`text-sm ${filterByAvailability === opt.key ? 'text-blue-900 font-semibold' : 'text-gray-600'}`}>
+                    {opt.label}
+                  </Text>
+                  {filterByAvailability === opt.key && (
+                    <Ionicons name="checkmark" size={16} color="#1E3A8A" className="ml-1" />
+                  )}
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Active Filters Display */}
+        {(selectedCategory !== "all" || filterByAvailability !== "all" || searchQuery) && (
+          <View className="px-4 pb-3">
+            <Text className="text-xs font-medium text-gray-500 mb-1">Active Filters:</Text>
+            <View className="flex-row flex-wrap">
+              {selectedCategory !== "all" && (
+                <View className="flex-row items-center bg-blue-100 px-2 py-1 rounded mr-2 mb-1">
+                  <Text className="text-xs font-medium text-blue-900 mr-1">
+                    Category: {serviceCategories.find(c => c.id === selectedCategory)?.title}
+                  </Text>
+                  <TouchableOpacity onPress={() => setSelectedCategory("all")}>
+                    <Ionicons name="close" size={12} color="#1E3A8A" />
+                  </TouchableOpacity>
+                </View>
+              )}
+              {filterByAvailability !== "all" && (
+                <View className="flex-row items-center bg-blue-100 px-2 py-1 rounded mr-2 mb-1">
+                  <Text className="text-xs font-medium text-blue-900 mr-1">
+                    {filterByAvailability === "available" ? "Available Now" : "Coming Soon"}
+                  </Text>
+                  <TouchableOpacity onPress={() => setFilterByAvailability("all")}>
+                    <Ionicons name="close" size={12} color="#1E3A8A" />
+                  </TouchableOpacity>
+                </View>
+              )}
+              {searchQuery && (
+                <View className="flex-row items-center bg-blue-100 px-2 py-1 rounded mr-2 mb-1">
+                  <Text className="text-xs font-medium text-blue-900 mr-1">
+                    Search: {searchQuery}
+                  </Text>
+                  <TouchableOpacity onPress={() => setSearchQuery("")}>
+                    <Ionicons name="close" size={12} color="#1E3A8A" />
+                  </TouchableOpacity>
+                </View>
+              )}
+              <TouchableOpacity 
+                className="flex-row items-center bg-gray-200 px-2 py-1 rounded mr-2 mb-1"
+                onPress={() => {
+                  setSelectedCategory("all");
+                  setFilterByAvailability("all");
+                  setSearchQuery("");
+                }}
+              >
+                <Ionicons name="close-circle" size={12} color="#374151" className="mr-1" />
+                <Text className="text-xs font-medium text-gray-700">Clear All</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </View>
+
+      <ScrollView 
+        className="flex-1"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 20 }}
+      >
+        {/* All Services by Category */}
+        {filteredCategories.length > 0 ? (
+          <View className="mt-1">
+            <View className="bg-white px-4 py-4 border-b border-gray-200">
+              <Text className="text-base font-semibold text-gray-900">
+                {searchQuery ? "Search Results" : "All Services"}
+              </Text>
+            </View>
+            <View className="bg-white px-4 py-4">
+              {filteredCategories.map(renderCategory)}
+            </View>
+          </View>
+        ) : (
+          <View className="items-center justify-center py-16 px-8 bg-white mt-1">
+            <Ionicons name="search-outline" size={48} color="#cbd5e0" />
+            <Text className="text-base font-semibold text-gray-600 mt-4 mb-2">
+              No services found
+            </Text>
+            <Text className="text-sm text-gray-400 text-center mb-4">
+              {searchQuery || selectedCategory !== "all" || filterByAvailability !== "all"
+                ? "Try adjusting your search or filters"
+                : "No services available"}
+            </Text>
+            {(searchQuery || selectedCategory !== "all" || filterByAvailability !== "all") && (
+              <TouchableOpacity 
+                className="px-5 py-2.5 bg-gray-50 rounded-lg border border-gray-300"
+                onPress={() => {
+                  setSearchQuery("");
+                  setSelectedCategory("all");
+                  setFilterByAvailability("all");
+                }}
+              >
+                <Text className="text-sm font-semibold text-blue-900">Clear Filters</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* Follow Us Section */}
+        <View className="bg-white mt-2 px-4 py-5 border-b border-gray-200">
+          <Text className="text-base font-semibold text-gray-900 mb-4">Follow ZRP</Text>
+          <View className="flex-row justify-center">
+            {socialMediaLinks.map((social) => (
+              <TouchableOpacity
+                key={social.id}
+                className="items-center mx-2"
+                onPress={() => openSocialMedia(social.url)}
+                activeOpacity={0.7}
+              >
+                <View 
+                  className="w-12 h-12 rounded-lg justify-center items-center mb-2"
+                  style={{ backgroundColor: `${social.color}15` }}
+                >
+                  <Ionicons name={social.icon} size={24} color={social.color} />
+                </View>
+                <Text className="text-xs font-semibold text-gray-700">{social.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Quick Links */}
+        <View className="bg-white mt-2 px-4 py-5">
+          <Text className="text-base font-semibold text-gray-900 mb-4">Quick Links</Text>
+          <View className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+            {[
+              { icon: "call", label: "Emergency Contacts", route: "/emergency-contacts" },
+              { icon: "location", label: "Police Stations Map", route: "/maps" },
+              { icon: "newspaper", label: "Latest News", route: "/press-release" },
+              { icon: "information-circle", label: "About SafeTap", route: "/about" },
+            ].map((link, index) => (
+              <TouchableOpacity 
+                key={index}
+                className={`flex-row items-center px-4 py-4 ${index < 3 ? 'border-b border-gray-200' : ''}`}
+                onPress={() => router.push(link.route)}
+              >
+                <Ionicons name={link.icon} size={18} color="#1E3A8A" />
+                <Text className="flex-1 text-sm font-medium text-gray-700 ml-3">{link.label}</Text>
+                <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Footer Spacing */}
+        <View className="h-5" />
+      </ScrollView>
+
+      {/* Coming Soon Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showComingSoonModal}
+        onRequestClose={() => setShowComingSoonModal(false)}
+      >
+        <View className="flex-1 bg-black/50 justify-center items-center px-5">
+          <View className="bg-white rounded-xl p-6 w-full max-w-sm items-center">
+            <View className="w-20 h-20 rounded-full bg-yellow-100 justify-center items-center mb-4">
+              <Ionicons name="time" size={36} color="#F59E0B" />
+            </View>
+            
+            <Text className="text-xl font-bold text-gray-900 mb-3">Coming Soon</Text>
+            
+            <Text className="text-sm text-gray-600 text-center mb-2 leading-5">
+              {comingSoonTitle} service is currently in development and will be available soon.
+            </Text>
+            
+            <Text className="text-xs text-gray-500 text-center mb-6">
+              We're working hard to bring you this feature.
+            </Text>
+            
+            <TouchableOpacity
+              className="w-full py-3 bg-blue-900 rounded-lg items-center"
+              onPress={() => setShowComingSoonModal(false)}
+            >
+              <Text className="text-sm font-semibold text-white">Got it</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+};
+
+export default Services;

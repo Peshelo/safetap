@@ -21,7 +21,7 @@ import { useNavigation } from "@react-navigation/native";
 const { width } = Dimensions.get("window");
 const PAGE_SIZE = 10;
 
-const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1588681664899-f142ff2dc9b1?w=800&q=80";
+const FALLBACK_IMAGE = "../../assets/images/fallback.png";
 
 const News = () => {
   const navigation = useNavigation();
@@ -205,7 +205,7 @@ const News = () => {
           <Image 
             source={{ uri: imageUrl }} 
             style={styles.itemImage}
-            defaultSource={{ uri: FALLBACK_IMAGE }}
+            defaultSource={require(FALLBACK_IMAGE)}
           />
         </View>
         <View style={styles.itemFooter}>
@@ -553,6 +553,7 @@ const styles = StyleSheet.create({
     width: 70,
     height: 70,
     borderRadius: 5,
+    
   },
   itemFooter: {
     flexDirection: "row",
