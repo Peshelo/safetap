@@ -23,7 +23,7 @@ const Services = () => {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [filterByAvailability, setFilterByAvailability] = useState("all");
 
-  // Social media links for ZRP (simplified)
+  // Social media links for ZRP (updated X from Twitter)
   const socialMediaLinks = [
     {
       id: "facebook",
@@ -33,19 +33,12 @@ const Services = () => {
       url: "https://www.facebook.com/ZimbabweRepublicPolice",
     },
     {
-      id: "twitter",
-      name: "Twitter",
-      icon: "logo-twitter",
-      color: "#1DA1F2",
-      url: "https://twitter.com/ZRPUnofficial",
-    },
-    {
-      id: "instagram",
-      name: "Instagram",
-      icon: "logo-instagram",
-      color: "#E4405F",
-      url: "https://www.instagram.com/zimbabwerepublicpolice",
-    },
+      id: "x",
+      name: "X",
+      icon: "logo-x",
+      color: "#000000",
+      url: "https://x.com/policezimbabwe",
+    }
   ];
 
   // Categorized services with availability flag
@@ -94,33 +87,33 @@ const Services = () => {
           title: "Crime Report",
           icon: "shield-checkmark",
           description: "File criminal reports",
-          available: true,
-          action: () => router.push("/report/crime"),
+          available: false,
+          action: () => showComingSoon("Crime Report"),
         },
         {
           id: 6,
           title: "Traffic Accident",
           icon: "car",
           description: "Report road accidents",
-          available: true,
-          action: () => router.push("/report/accident"),
+          available: false,
+          action: () => showComingSoon("Traffic Accident"),
         },
         {
           id: 7,
-          title: "Lost Property",
+          title: "Lost and Found",
           icon: "search",
-          description: "Report lost items",
+          description: "Recover lost items",
           available: false,
-          action: () => showComingSoon("Lost Property"),
+          action: () => showComingSoon("Lost and Found"),
         },
-        {
-          id: 8,
-          title: "Noise Complaint",
-          icon: "volume-high",
-          description: "Report disturbances",
-          available: false,
-          action: () => showComingSoon("Noise Complaint"),
-        },
+        // {
+        //   id: 8,
+        //   title: "Noise Complaint",
+        //   icon: "volume-high",
+        //   description: "Report disturbances",
+        //   available: false,
+        //   action: () => showComingSoon("Noise Complaint"),
+        // },
       ],
     },
     {
@@ -146,14 +139,6 @@ const Services = () => {
           action: () => showComingSoon("Feedback"),
         },
         {
-          id: 12,
-          title: "Community Watch",
-          icon: "eye",
-          description: "Neighborhood watch",
-          available: false,
-          action: () => showComingSoon("Community Watch"),
-        },
-        {
           id: 13,
           title: "Crime Prevention",
           icon: "shield",
@@ -171,7 +156,7 @@ const Services = () => {
       services: [
              {
           id: 2,
-          title: "Search Police Station",
+          title: "Search Police Station Contacts",
           icon: "call",
           description: "Police Station Details",
           available: true,
@@ -194,63 +179,15 @@ const Services = () => {
           action: () => showComingSoon("Wanted Persons"),
         },
         {
-          id: 16,
-          title: "Traffic Updates",
-          icon: "traffic-light",
-          description: "Road conditions",
-          available: false,
-          action: () => showComingSoon("Traffic Updates"),
-        },
-        {
           id: 17,
-          title: "Contact Directory",
+          title: "Lost Persons",
           icon: "call",
-          description: "Police contacts",
+          description: "Report or find missing persons",
           available: false,
-          action: () => showComingSoon("Contact Directory"),
+          action: () => showComingSoon("Lost Persons"),
         },
       ],
-    },
-    {
-      id: "digital",
-      title: "Digital",
-      icon: "laptop",
-      color: "#F59E0B",
-      services: [
-        {
-          id: 18,
-          title: "Cyber Crime",
-          icon: "globe",
-          description: "Report online crimes",
-          available: false,
-          action: () => showComingSoon("Cyber Crime"),
-        },
-        {
-          id: 19,
-          title: "Case Status",
-          icon: "time",
-          description: "Track your reports",
-          available: false,
-          action: () => showComingSoon("Case Status"),
-        },
-        {
-          id: 20,
-          title: "Appointment",
-          icon: "calendar",
-          description: "Schedule visits",
-          available: false,
-          action: () => showComingSoon("Appointment Booking"),
-        },
-        {
-          id: 21,
-          title: "Digital Evidence",
-          icon: "camera",
-          description: "Submit evidence",
-          available: false,
-          action: () => showComingSoon("Digital Evidence"),
-        },
-      ],
-    },
+    }
   ];
 
   const showComingSoon = (title) => {
@@ -295,6 +232,9 @@ const Services = () => {
       laptop: (size, color) => <Ionicons name="laptop" size={size} color={color} />,
       construct: (size, color) => <Ionicons name="construct" size={size} color={color} />,
       info: (size, color) => <Ionicons name="information-circle" size={size} color={color} />,
+      news: (size, color) => <Ionicons name="newspaper" size={size} color={color} />,
+      archive: (size, color) => <Ionicons name="archive" size={size} color={color} />,
+      "shield-checkmark": (size, color) => <Ionicons name="shield-checkmark" size={size} color={color} />,
       
       // MaterialCommunityIcons for specific icons
       sos: (size, color) => <MaterialCommunityIcons name="sos" size={size} color={color} />,
@@ -555,7 +495,7 @@ const Services = () => {
       <ScrollView 
         className="flex-1"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 20 }}
+        contentContainerStyle={{ paddingBottom: 80 }} // Added padding for bottom navbar
       >
         {/* All Services by Category */}
         {filteredCategories.length > 0 ? (
@@ -641,8 +581,7 @@ const Services = () => {
           </View>
         </View>
 
-        {/* Footer Spacing */}
-        <View className="h-5" />
+        {/* Footer Spacing - Removed extra spacing since paddingBottom handles it */}
       </ScrollView>
 
       {/* Coming Soon Modal */}

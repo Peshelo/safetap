@@ -14,44 +14,45 @@ import {
 } from "react-native";
 import React, { useState, useEffect } from "react";
 import { router } from "expo-router";
-import { Ionicons, FontAwesome5, MaterialIcons } from "@expo/vector-icons";
+import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import pb from "../../lib/connection";
 import * as Location from "expo-location";
 import * as SecureStore from "expo-secure-store";
-import SOSBottomSheet from "../components/SOSBottomSheet";
 import { StatusBar } from "react-native";
 
 const { width } = Dimensions.get("window");
 
+const COLORS = {
+  navy: "#1E3A8A",
+  navyLight: "#2D4FAA",
+  yellow: "#FBBF24",
+  yellowLight: "#FDE68A",
+  red: "#DC2626",
+  green: "#059669",
+  bg: "#F1F5F9",
+  white: "#FFFFFF",
+  textDark: "#0F172A",
+  textMid: "#475569",
+  textLight: "#94A3B8",
+  border: "#E2E8F0",
+};
+
 const Home = () => {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [userPhone, setUserPhone] = useState(null);
   const [newsArticles, setNewsArticles] = useState([]);
-  const [userLocation, setUserLocation] = useState("");
-  const [userCoords, setUserCoords] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [showSOSSheet, setShowSOSSheet] = useState(false);
   const [showComingSoon, setShowComingSoon] = useState(false);
   const [comingSoonTitle, setComingSoonTitle] = useState("");
 
-  const fetchUserPhone = async () => {
-    const savedInfo = await SecureStore.getItemAsync("userEmergencyInfo");
-    const userInfo = JSON.parse(savedInfo);
-    if (userInfo) {
-      setUserPhone(userInfo?.emergencyContact);
-    }
-  };
+  // Notice banner text — edit as needed
+  const noticeBanner = "NOTICE: Please report any suspicious activity to your nearest police station immediately. Stay safe.";
 
   const fetchNewsArticles = async () => {
     try {
       setLoading(true);
-      const records = await pb.collection("news").getFullList({
-        sort: "-created",
-      });
+      const records = await pb.collection("news").getFullList({ sort: "-created" });
       setNewsArticles(records);
     } catch (err) {
-      setError("Failed to fetch news articles");
       console.error(err);
     } finally {
       setLoading(false);
@@ -60,100 +61,65 @@ const Home = () => {
   };
 
   useEffect(() => {
-    fetchUserPhone();
-    getLocation();
     fetchNewsArticles();
   }, []);
 
-  const getLocation = async () => {
-    let { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== "granted") {
-      return;
-    }
-
-    try {
-      let location = await Location.getCurrentPositionAsync({});
-      const { latitude, longitude } = location.coords;
-      setUserLocation(`${latitude},${longitude}`);
-      setUserCoords({ latitude, longitude });
-    } catch (error) {
-      console.error("Error getting location:", error);
-    }
+  const makeEmergencyCall = (number) => {
+    Linking.openURL(`tel:${number}`).catch(() =>
+      Alert.alert("Error", "Could not make the call")
+    );
   };
 
-  const makeEmergencyCall = (number) => {
-    const url = `tel:${number}`;
-    Linking.openURL(url).catch(() =>
-      Alert.alert("Error", "Could not make the call")
+  const openWhatsApp = (number) => {
+    // Strip leading + for WhatsApp URL format
+    const cleaned = number.replace(/\D/g, "");
+    Linking.openURL(`https://wa.me/${cleaned}`).catch(() =>
+      Alert.alert("Error", "Could not open WhatsApp")
     );
   };
 
   const handleRefresh = () => {
     setRefreshing(true);
     fetchNewsArticles();
-    getLocation();
   };
 
-  // 4 Quick Actions (as requested)
+  const showComingSoonAlert = (title) => {
+    setComingSoonTitle(title);
+    setShowComingSoon(true);
+  };
+
   const quickActions = [
     {
-      title: "Make a Report",
-      subtitle: "File crime or incident reports",
-      icon: "file-alt",
-      available: true,
-      action: () => router.push("/report/crime"),
-    },
-        {
-      title: "Latest News",
-      subtitle: "Get latest news and press releases",
+      title: "Press Release",
+      subtitle: "Latest news & press releases",
       icon: "newspaper",
-      available: true,
       action: () => router.push("/press-release"),
     },
     {
-      title: "Traffic Violations",
-      subtitle: "Search traffic violations",
-      icon: "car",
-      available: false,
-      action: () => showComingSoonAlert("Traffic Violations"),
+      title: "Suggestion Box",
+      subtitle: "Leave feedback anonymously",
+      icon: "archive",
+      action: () => router.push("/report/complaint"),
     },
+  ];
+
+  const policeServices = [
     {
       title: "Explore Services",
-      subtitle: "Browse all police services",
+      description: "Browse all police services",
       icon: "search",
       available: true,
       action: () => router.push("/services"),
     },
-
-
-
-  ];
-
-  // Police Services (moved from quick actions)
-  const policeServices = [
     {
-      title: "Police Report Follow up",
+      title: "Report Follow-up",
       description: "Track your report status",
       icon: "clipboard-check",
       available: false,
-      action: () => showComingSoonAlert("Police Report Follow up"),
+      action: () => showComingSoonAlert("Police Report Follow-up"),
     },
-        {
-      title: "Report Accident",
-      description: "Report traffic accidents",
-      icon: "car-crash",
-      available: false,
-      action: () => router.push("/report/accident"),
-    },
-                {
-      title: "Suggestion Box",
-      description: "Leave a suggestion anounymously",
-      icon: "archive",
-      available: true,
-      action: () => router.push("/report/complaint"),
-    },
-            {
-      title: "ZRP On Social Media",
+    {
+      title: "ZRP on Social Media",
       description: "Follow ZRP online",
       icon: "share-alt",
       available: true,
@@ -166,87 +132,49 @@ const Home = () => {
       available: true,
       action: () => router.push("/about"),
     },
-
   ];
 
-  // Emergency Contacts with solid colors
   const emergencyContacts = [
     {
       title: "Police Emergency",
-      subtitle: "24/7 Hotline • 08005462",
-      number: "08005462",
+      subtitle: "24/7 Hotline",
+      number: "+263242703631",
       icon: "shield-alt",
-      bgColor: "#DC2626",
-      textColor: "#FFFFFF",
-      iconColor: "#FFFFFF",
+      bgColor: COLORS.red,
     },
     {
       title: "Child Protection",
       subtitle: "Toll Free Helpline",
-      number: "+263242255583",
+      number: "+263242703631",
       icon: "child",
-      bgColor: "#059669",
-      textColor: "#FFFFFF",
-      iconColor: "#FFFFFF",
-    },
-    {
-      title: "Traffic Police",
-      subtitle: "Road emergencies",
-      number: "08005463",
-      icon: "car",
-      bgColor: "#1D4ED8",
-      textColor: "#FFFFFF",
-      iconColor: "#FFFFFF",
-    },
-    {
-      title: "Women's Desk",
-      subtitle: "Gender-based violence",
-      number: "08005464",
-      icon: "female",
-      bgColor: "#7C3AED",
-      textColor: "#FFFFFF",
-      iconColor: "#FFFFFF",
+      bgColor: "#6B21A8",
     },
   ];
 
-  // Dummy image URLs for backgrounds
-  const dummyImages = {
-    policeStation: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80",
-    mapLocation: "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80",
-  };
-
-  // News Skeleton Component
   const NewsSkeleton = () => (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      style={styles.newsHorizontalScroll}
       contentContainerStyle={styles.newsScrollContent}
     >
       {[1, 2, 3].map((item) => (
         <View key={item} style={styles.newsSkeletonCard}>
           <View style={styles.skeletonImage} />
-          <View style={styles.skeletonContent}>
+          <View style={{ padding: 12 }}>
             <View style={styles.skeletonTitle} />
             <View style={styles.skeletonDescription} />
-            <View style={styles.skeletonMeta} />
           </View>
         </View>
       ))}
     </ScrollView>
   );
 
-  const showComingSoonAlert = (title) => {
-    setComingSoonTitle(title);
-    setShowComingSoon(true);
-  };
-
   return (
     <View style={styles.container}>
-      <StatusBar barStyle={'light-content'} backgroundColor={'#0d9488'}/>
-      
-      {/* Custom Header */}
-      <View style={styles.customHeader}>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.navy} />
+
+      {/* Header */}
+      <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.logoContainer}>
             <Image
@@ -255,27 +183,17 @@ const Home = () => {
               resizeMode="contain"
             />
           </View>
-          <View style={styles.titleContainer}>
+          <View>
             <Text style={styles.appName}>SafeTap</Text>
             <Text style={styles.appSubtitle}>Zimbabwe Republic Police</Text>
           </View>
         </View>
-        
-        <View style={styles.headerRight}>
-          <TouchableOpacity
-            onPress={() => setShowSOSSheet(true)}
-            style={styles.sosButton}
-          >
-            <Text style={styles.sosText}>SOS</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => router.push("(tabs)/about")}
-            style={styles.profileButton}
-          >
-            <Ionicons name="person" size={20} color="#1E3A8A" />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          onPress={() => router.push("(tabs)/about")}
+          style={styles.profileButton}
+        >
+          <Ionicons name="settings" size={18} color={COLORS.navy} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -285,225 +203,163 @@ const Home = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            colors={["#FBBF24"]}
-            tintColor="#FBBF24"
+            colors={[COLORS.yellow]}
+            tintColor={COLORS.yellow}
           />
         }
         showsVerticalScrollIndicator={false}
       >
-
-        {/* Police Station Features - Creative Side-by-Side Layout */}
-        <View style={styles.stationFeaturesSection}>
-          <View style={styles.stationFeaturesRow}>
-            {/* Find Police Stations - Creative Design */}
-            <TouchableOpacity
-              onPress={() => router.push("(tabs)/contacts")}
-              style={styles.findStationsCard}
-              activeOpacity={0.9}
-            >
-              <ImageBackground
-                source={require("../../assets/images/fallback.png")}
-                style={styles.findStationsBackground}
-                imageStyle={styles.findStationsImageStyle}
-              >
-                <View style={styles.findStationsOverlay}>
-                  <View style={styles.findStationsIconCircle}>
-                    <FontAwesome5 name="building" size={24} color="#FFFFFF" />
-                  </View>
-                  <Text style={styles.findStationsTitle}>
-                    Police Station Directory
-                  </Text>
-                  <Text style={styles.findStationsSubtitle}>
-                    Browse all stations with detailed contact information
-                  </Text>
-                </View>
-              </ImageBackground>
-            </TouchableOpacity>
-
-            {/* Locate Nearby Stations - Creative Design */}
-            <TouchableOpacity
-              onPress={() => router.push("/maps")}
-              style={styles.locateStationsCard}
-              activeOpacity={0.9}
-            >
-              <ImageBackground
-                 source={require("../../assets/images/fallback.png")}
-                style={styles.locateStationsBackground}
-                imageStyle={styles.locateStationsImageStyle}
-              >
-                <View style={styles.locateStationsOverlay}>
-                  <View style={styles.locateStationsIconCircle}>
-                    <FontAwesome5 name="map-marked-alt" size={24} color="#FFFFFF" />
-                  </View>
-                  <Text style={styles.locateStationsTitle}>
-                    Live Station Locator
-                  </Text>
-                  <Text style={styles.locateStationsSubtitle}>
-                    Find nearest stations with directions & distance
-                  </Text>
-                </View>
-              </ImageBackground>
-            </TouchableOpacity>
-          </View>
+        {/* Notice Banner */}
+        <View style={styles.noticeBanner}>
+          <FontAwesome5 name="bullhorn" size={13} color={COLORS.navy} style={{ marginRight: 8, marginTop: 1 }} />
+          <Text style={styles.noticeText} numberOfLines={2}>{noticeBanner}</Text>
         </View>
 
-        {/* Emergency Contacts - Solid Colors */}
+        {/* Station Cards */}
+        <View style={styles.stationRow}>
+          {/* Directory */}
+          <TouchableOpacity
+            onPress={() => router.push("(tabs)/contacts")}
+            style={styles.stationCardWrapper}
+            activeOpacity={0.88}
+          >
+            <ImageBackground
+              source={require("../../assets/images/fallback.png")}
+              style={styles.stationCardBg}
+              imageStyle={styles.stationCardImageStyle}
+            >
+              <View style={styles.stationOverlayNavy}>
+                <View style={styles.stationIconCircle}>
+                  <FontAwesome5 name="building" size={20} color={COLORS.white} />
+                </View>
+                <Text style={styles.stationCardTitle}>Police Station Directory</Text>
+                <Text style={styles.stationCardSub}>Browse all stations with contact information</Text>
+              </View>
+            </ImageBackground>
+          </TouchableOpacity>
+
+          {/* Locate Nearby */}
+          <TouchableOpacity
+            onPress={() => router.push("/maps")}
+            style={styles.stationCardWrapper}
+            activeOpacity={0.88}
+          >
+            <ImageBackground
+              source={require("../../assets/images/fallback.png")}
+              style={styles.stationCardBg}
+              imageStyle={styles.stationCardImageStyle}
+            >
+              <View style={styles.stationOverlayYellow}>
+                <View style={[styles.stationIconCircle, { backgroundColor: "rgba(0,0,0,0.18)" }]}>
+                  <FontAwesome5 name="map-marked-alt" size={20} color={COLORS.navy} />
+                </View>
+                <Text style={[styles.stationCardTitle, { color: COLORS.navy }]}>Live Station Locator</Text>
+                <Text style={[styles.stationCardSub, { color: "rgba(15,23,42,0.75)" }]}>Find nearest stations with directions & distance</Text>
+              </View>
+            </ImageBackground>
+          </TouchableOpacity>
+        </View>
+
+        {/* Emergency Contacts */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleContainer}>
-              <View style={styles.sectionIcon}>
-                <FontAwesome5 name="phone-alt" size={16} color="#DC2626" />
-              </View>
+            <View style={styles.sectionTitleRow}>
+              <FontAwesome5 name="phone-alt" size={13} color={COLORS.red} />
               <Text style={styles.sectionTitle}>Emergency Contacts</Text>
             </View>
-            <TouchableOpacity onPress={() => router.push("/emergency-contacts")}>
-              <Text style={styles.viewAllText}>All Contacts</Text>
+            <TouchableOpacity onPress={() => router.push("/contacts")}>
+              <Text style={styles.viewAll}>All Contacts</Text>
             </TouchableOpacity>
           </View>
-          
+
+          {/* Emergency call cards */}
           <View style={styles.emergencyGrid}>
             {emergencyContacts.map((contact, index) => (
               <TouchableOpacity
                 key={index}
                 onPress={() => makeEmergencyCall(contact.number)}
-                style={[
-                  styles.emergencyCard,
-                  { backgroundColor: contact.bgColor }
-                ]}
-                activeOpacity={0.9}
+                style={[styles.emergencyCard, { backgroundColor: contact.bgColor }]}
+                activeOpacity={0.88}
               >
-                <View style={styles.emergencyCardContent}>
-                  <View style={styles.emergencyIconContainer}>
-                    <FontAwesome5
-                      name={contact.icon}
-                      size={18}
-                      color={contact.iconColor}
-                    />
-                  </View>
-                  <View style={styles.emergencyTextContainer}>
-                    <Text style={[styles.emergencyTitle, { color: contact.textColor }]} numberOfLines={1}>
-                      {contact.title}
-                    </Text>
-                    <Text style={[styles.emergencySubtitle, { color: contact.textColor }]} numberOfLines={1}>
-                      {contact.subtitle}
-                    </Text>
-                  </View>
-                  <View style={styles.callButton}>
-                    <FontAwesome5
-                      name="phone-alt"
-                      size={12}
-                      color={contact.bgColor}
-                    />
-                  </View>
+                <View style={styles.emergencyIconWrap}>
+                  <FontAwesome5 name={contact.icon} size={16} color={COLORS.white} />
+                </View>
+                <Text style={styles.emergencyTitle}>{contact.title}</Text>
+                <Text style={styles.emergencySubtitle}>{contact.subtitle}</Text>
+                <View style={[styles.callBadge, { backgroundColor: "rgba(255,255,255,0.25)" }]}>
+                  <FontAwesome5 name="phone-alt" size={10} color={COLORS.white} />
                 </View>
               </TouchableOpacity>
             ))}
           </View>
-        </View>
 
-        {/* Quick Actions Grid - 4 items as requested */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions:</Text>
-          <View style={styles.servicesGrid}>
-            {quickActions.map((service, index) => (
-              <TouchableOpacity
-                key={index}
-                onPress={service.action}
-                style={[styles.serviceCard, !service.available && styles.serviceCardDisabled]}
-                activeOpacity={0.9}
-                disabled={!service.available}
-              >
-                <View style={[styles.serviceIcon, { backgroundColor: service.available ? '#E0F2FE' : '#F3F4F6' }]}>
-                  <FontAwesome5
-                    name={service.icon}
-                    size={18}
-                    color={service.available ? "#1E3A8A" : "#9CA3AF"}
-                  />
-                </View>
-                <Text style={[styles.serviceTitle, !service.available && styles.serviceTitleDisabled]} numberOfLines={2}>
-                  {service.title}
-                </Text>
-                <Text style={[styles.serviceSubtitle, !service.available && styles.serviceSubtitleDisabled]} numberOfLines={2}>
-                  {service.subtitle}
-                </Text>
-                {!service.available && (
-                  <View style={styles.comingSoonBadge}>
-                    <Text style={styles.comingSoonText}>Soon</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Police Services Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleContainer}>
-              <View style={styles.sectionIcon}>
-                <FontAwesome5 name="tasks" size={16} color="#1E3A8A" />
-              </View>
-              <Text style={styles.sectionTitle}>Police Services</Text>
+          {/* WhatsApp — separate, distinct card */}
+          <View style={styles.whatsappSection}>
+            <View style={styles.whatsappLabelRow}>
+              <View style={styles.whatsappDivider} />
+              <Text style={styles.whatsappLabel}>Chat & Messaging</Text>
+              <View style={styles.whatsappDivider} />
             </View>
-            <TouchableOpacity onPress={() => router.push("/services")}>
-              <Text style={styles.viewAllText}>View All</Text>
+            <TouchableOpacity
+              onPress={() => openWhatsApp("+263712800197")}
+              style={styles.whatsappCard}
+              activeOpacity={0.88}
+            >
+              <View style={styles.whatsappIconWrap}>
+                <FontAwesome5 name="whatsapp" size={22} color={COLORS.white} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.whatsappTitle}>Chat on WhatsApp</Text>
+                <Text style={styles.whatsappSub}>Talk to us on WhatsApp</Text>
+              </View>
+              <View style={styles.whatsappChevron}>
+                <Ionicons name="arrow-forward" size={14} color="#25D366" />
+              </View>
             </TouchableOpacity>
           </View>
-          
-          <View style={styles.quickServicesContainer}>
-            {policeServices.map((service, index) => (
+        </View>
+
+        {/* Quick Actions */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.quickActionsGrid}>
+            {quickActions.map((item, index) => (
               <TouchableOpacity
                 key={index}
-                onPress={service.action}
-                style={[styles.quickServiceCard, !service.available && styles.quickServiceCardDisabled]}
-                activeOpacity={0.9}
-                disabled={!service.available}
+                onPress={item.action}
+                style={styles.quickActionCard}
+                activeOpacity={0.88}
               >
-                <View style={styles.quickServiceContent}>
-                  <View style={[styles.quickServiceIconContainer, !service.available && styles.quickServiceIconContainerDisabled]}>
-                    <FontAwesome5
-                      name={service.icon}
-                      size={16}
-                      color={service.available ? "#1E3A8A" : "#9CA3AF"}
-                    />
-                  </View>
-                  <View style={styles.quickServiceTextContainer}>
-                    <Text style={[styles.quickServiceTitle, !service.available && styles.quickServiceTitleDisabled]} numberOfLines={1}>
-                      {service.title}
-                    </Text>
-                    <Text style={[styles.quickServiceDescription, !service.available && styles.quickServiceDescriptionDisabled]} numberOfLines={2}>
-                      {service.description}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={service.available ? "#94A3B8" : "#D1D5DB"} />
+                <View style={styles.quickActionIcon}>
+                  <FontAwesome5 name={item.icon} size={17} color={COLORS.navy} />
                 </View>
+                <Text style={styles.quickActionTitle}>{item.title}</Text>
+                <Text style={styles.quickActionSub}>{item.subtitle}</Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
-        {/* News Section */}
-        <View style={styles.sectionNews}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleContainer}>
-              <View style={styles.sectionIcon}>
-                <FontAwesome5 name="newspaper" size={16} color="#F59E0B" />
-              </View>
-              <Text style={styles.sectionTitle}>News & Press Release</Text>
+     
+
+        {/* News */}
+        <View style={styles.newsSection}>
+          <View style={[styles.sectionHeader, { paddingHorizontal: 16 }]}>
+            <View style={styles.sectionTitleRow}>
+              <FontAwesome5 name="newspaper" size={13} color={COLORS.yellow} />
+              <Text style={styles.sectionTitle}>News & Press Releases</Text>
             </View>
             <TouchableOpacity onPress={() => router.push("/press-release")}>
-              <Text style={styles.viewAllText}>View All</Text>
+              <Text style={styles.viewAll}>View All</Text>
             </TouchableOpacity>
           </View>
-          
-          {/* Loading State */}
+
           {loading ? (
             <NewsSkeleton />
           ) : newsArticles.length > 0 ? (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              style={styles.newsHorizontalScroll}
               contentContainerStyle={styles.newsScrollContent}
             >
               {newsArticles.map((item) => (
@@ -511,29 +367,24 @@ const Home = () => {
                   key={item.id}
                   onPress={() => router.push(`/press-release/${item.id}`)}
                   style={styles.newsCard}
-                  activeOpacity={0.9}
+                  activeOpacity={0.88}
                 >
-                  <View style={styles.newsImageContainer}>
-                    <Image 
-                      source={item.file ? { uri: pb.files.getURL(item, item.file) } : require("../../assets/images/fallback.png")}
-                      style={styles.newsImage}
-                      defaultSource={require("../../assets/images/fallback.png")}
-                    />
-                  </View>
+                  <Image
+                    source={
+                      item.file
+                        ? { uri: pb.files.getURL(item, item.file) }
+                        : require("../../assets/images/fallback.png")
+                    }
+                    style={styles.newsImage}
+                    defaultSource={require("../../assets/images/fallback.png")}
+                  />
                   <View style={styles.newsContent}>
-                    <View style={styles.newsHeader}>
-                       <View style={styles.newsDateContainer}>
-                        <Text style={styles.newsDate}>
-                          {new Date(item.created).getDate()}/{new Date(item.created).getMonth() + 1}/{new Date(item.created).getFullYear()}
-                        </Text>
-                      </View>
-                      <Text style={styles.newsTitle} numberOfLines={2}>
-                        {item.title}
-                      </Text>
-                     
-                    </View>
+                    <Text style={styles.newsDate}>
+                      {new Date(item.created).toLocaleDateString("en-GB")}
+                    </Text>
+                    <Text style={styles.newsTitle} numberOfLines={2}>{item.title}</Text>
                     {item.description && (
-                      <Text style={styles.newsDescription} numberOfLines={2}>
+                      <Text style={styles.newsDesc} numberOfLines={2}>
                         {item.description.replace(/<[^>]*>/g, "")}
                       </Text>
                     )}
@@ -542,47 +393,74 @@ const Home = () => {
               ))}
             </ScrollView>
           ) : (
-            <View style={styles.noNewsContainer}>
-              <Text style={styles.noNewsText}>No news articles available</Text>
+            <View style={styles.emptyNews}>
+              <Text style={styles.emptyNewsText}>No news articles available</Text>
             </View>
           )}
         </View>
 
-        {/* Footer Note */}
+   {/* Police Services */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleRow}>
+              <FontAwesome5 name="tasks" size={13} color={COLORS.navy} />
+              <Text style={styles.sectionTitle}>Police Services</Text>
+            </View>
+            <TouchableOpacity onPress={() => router.push("/services")}>
+              <Text style={styles.viewAll}>View All</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.servicesList}>
+            {policeServices.map((service, index) => (
+              <TouchableOpacity
+                key={index}
+                onPress={service.action}
+                style={[
+                  styles.serviceRow,
+                  index < policeServices.length - 1 && styles.serviceRowBorder,
+                  !service.available && { opacity: 0.5 },
+                ]}
+                activeOpacity={0.8}
+                disabled={!service.available}
+              >
+                <View style={styles.serviceIconWrap}>
+                  <FontAwesome5 name={service.icon} size={14} color={service.available ? COLORS.navy : COLORS.textLight} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.serviceTitle}>{service.title}</Text>
+                  <Text style={styles.serviceDesc}>{service.description}</Text>
+                </View>
+                {service.available ? (
+                  <Ionicons name="chevron-forward" size={15} color={COLORS.textLight} />
+                ) : (
+                  <View style={styles.soonBadge}>
+                    <Text style={styles.soonText}>Soon</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Footer */}
         <View style={styles.footer}>
-          <FontAwesome5 name="shield-alt" size={18} color="#1E3A8A" />
+          <FontAwesome5 name="shield-alt" size={16} color={COLORS.navy} />
           <Text style={styles.footerText}>
             Your safety is our priority. Always know your nearest police station.
           </Text>
         </View>
       </ScrollView>
 
-      <SOSBottomSheet
-        visible={showSOSSheet}
-        onClose={() => setShowSOSSheet(false)}
-        onTriggerSOS={(locationCoords) => {
-          console.log('SOS triggered with location:', locationCoords);
-        }}
-      />
-
       {/* Coming Soon Modal */}
       {showComingSoon && (
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalIcon}>
-              <Ionicons name="time" size={48} color="#F59E0B" />
-            </View>
-            
+          <View style={styles.modalBox}>
+            <Ionicons name="time-outline" size={44} color={COLORS.yellow} style={{ marginBottom: 12 }} />
             <Text style={styles.modalTitle}>Coming Soon</Text>
-            
             <Text style={styles.modalMessage}>
               {comingSoonTitle} is currently in development and will be available soon.
             </Text>
-            
-            <Text style={styles.modalSubtitle}>
-              We're working hard to bring you this feature.
-            </Text>
-            
             <TouchableOpacity
               style={styles.modalButton}
               onPress={() => setShowComingSoon(false)}
@@ -597,577 +475,404 @@ const Home = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f0f6f7',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 30,
-  },
-  
-  // Custom Header Styles
-  customHeader: {
-    borderBottomWidth: 0.5,
-    borderBottomColor: "#D1D5DB",
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: "#1E3A8A",
-    paddingTop: 55,
-    paddingBottom: 10,
+  container: { flex: 1, backgroundColor: COLORS.bg },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingBottom: 40 },
+
+  // Header
+  header: {
+    backgroundColor: COLORS.navy,
+    paddingTop: 52,
+    paddingBottom: 12,
     paddingHorizontal: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  logoContainer: {
-    width: 50,
-    height: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 5,
-  },
-  logo: {
-    width: 50,
-    height: 50,
-  },
-  titleContainer: {
-    flexDirection: 'column',
-  },
-  appName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  appSubtitle: {
-    fontSize: 11,
-    color: 'lightgray',
-    marginTop: 2,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  sosButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: '#DC2626',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  sosText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
-  },
+  headerLeft: { flexDirection: "row", alignItems: "center", flex: 1 },
+  logoContainer: { width: 44, height: 44, marginRight: 10 },
+  logo: { width: 44, height: 44 },
+  appName: { fontSize: 17, fontWeight: "700", color: COLORS.white },
+  appSubtitle: { fontSize: 11, color: "rgba(255,255,255,0.65)", marginTop: 1 },
   profileButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#FDE68A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#FBBF24',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: COLORS.yellowLight,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: COLORS.yellow,
   },
 
-  // Police Station Features Section
-  stationFeaturesSection: {
+  // Notice Banner
+  noticeBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: COLORS.yellowLight,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.yellow,
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 4,
+    borderRadius: 8,
+    padding: 12,
+  },
+  noticeText: {
+    flex: 1,
+    fontSize: 12.5,
+    color: COLORS.textDark,
+    lineHeight: 18,
+    fontWeight: "500",
+  },
+
+  // Station Cards
+  stationRow: {
+    flexDirection: "row",
     paddingHorizontal: 16,
     marginTop: 16,
     marginBottom: 20,
-  },
-  stationFeaturesRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     gap: 12,
   },
-  
-  // Find Police Stations Card
-  findStationsCard: {
+  stationCardWrapper: {
     flex: 1,
     height: 180,
-    borderRadius: 12,
-    overflow: 'hidden',
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  stationCardBg: {
+    width: "100%",
+    height: "100%",
+  },
+  stationCardImageStyle: {
+    borderRadius: 14,
+  },
+  stationOverlayNavy: {
+    flex: 1,
+    backgroundColor: "rgba(30, 58, 138, 0.88)",
+    padding: 16,
+    justifyContent: "flex-start",
     borderBottomWidth: 3,
-    borderBottomColor:'#FBBF24'
+    borderBottomColor: COLORS.yellow,
   },
-  findStationsBackground: {
-    width: '100%',
-    height: '100%',
-  },
-  findStationsImageStyle: {
-    borderRadius: 12,
-  },
-  findStationsOverlay: {
+  stationOverlayYellow: {
     flex: 1,
-    backgroundColor: 'rgba(30, 58, 138, 0.85)',
+    backgroundColor: "rgba(251, 191, 36, 0.88)",
     padding: 16,
-    justifyContent: 'space-between',
-  },
-  findStationsIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-  },
-  findStationsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 6,
-  },
-  findStationsSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.9)',
-    lineHeight: 16,
-    marginBottom: 10,
-  },
-
-  // Locate Stations Card
-  locateStationsCard: {
-    flex: 1,
-    height: 180,
-    borderRadius: 12,
-    overflow: 'hidden',
+    justifyContent: "flex-start",
     borderBottomWidth: 3,
-    borderBottomColor:'#1E3A8A'
+    borderBottomColor: COLORS.navy,
   },
-  locateStationsBackground: {
-    width: '100%',
-    height: '100%',
-  },
-  locateStationsImageStyle: {
-    borderRadius: 12,
-  },
-  locateStationsOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(251, 191, 36, 0.85)',
-    padding: 16,
-    justifyContent: 'space-between',
-  },
-  locateStationsIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-  },
-  locateStationsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000000',
-    marginBottom: 6,
-  },
-  locateStationsSubtitle: {
-    fontSize: 12,
-    color: 'rgba(0, 0, 0, 0.9)',
-    lineHeight: 16,
-    marginBottom: 10,
-  },
-
-  // Section Styles
-  section: {
-    backgroundColor: 'transparent',
-    paddingHorizontal: 16,
-    marginBottom: 20,
-  },
-  sectionNews: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical:10,
-    marginBottom: 20,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  sectionTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  sectionIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sectionTitle: {
-    fontSize: 17,
-    marginBottom: 5,
-    fontWeight: '600',
-    color: '#1E293B',
-  },
-  viewAllText: {
-    color: '#1E3A8A',
-    fontWeight: '500',
-    fontSize: 13,
-  },
-
-  // Emergency Contacts
-  emergencyGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  emergencyCard: {
-    width: '48%',
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  emergencyCardContent: {
-    padding: 14,
-  },
-  emergencyIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-  },
-  emergencyTextContainer: {
-    flex: 1,
-  },
-  emergencyTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  emergencySubtitle: {
-    fontSize: 11,
-    opacity: 0.9,
-    fontWeight: '500',
-  },
-  callButton: {
-    position: 'absolute',
-    top: 14,
-    right: 14,
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // Quick Actions Grid
-  servicesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  serviceCard: {
-    width: '48%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    position: 'relative',
-  },
-  serviceCardDisabled: {
-    backgroundColor: '#F9FAFB',
-    opacity: 0.7,
-  },
-  serviceIcon: {
+  stationIconCircle: {
     width: 44,
     height: 44,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+  },
+  stationCardTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: COLORS.white,
+    marginBottom: 5,
+    lineHeight: 18,
+  },
+  stationCardSub: {
+    fontSize: 11.5,
+    color: "rgba(255,255,255,0.85)",
+    lineHeight: 16,
+  },
+
+  // Sections
+  section: { paddingHorizontal: 16, marginBottom: 20 },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 12,
   },
-  serviceTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#1E293B',
-    marginBottom: 6,
-    lineHeight: 18,
-  },
-  serviceTitleDisabled: {
-    color: '#9CA3AF',
-  },
-  serviceSubtitle: {
-    fontSize: 12,
-    color: '#6B7280',
-    lineHeight: 16,
-  },
-  serviceSubtitleDisabled: {
-    color: '#D1D5DB',
-  },
-  comingSoonBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  comingSoonText: {
-    fontSize: 10,
-    color: '#6B7280',
-    fontWeight: '600',
-  },
+  sectionTitleRow: { flexDirection: "row", alignItems: "center", gap: 7 },
+  sectionTitle: { fontSize: 15.5, fontWeight: "700", color: COLORS.textDark },
+  viewAll: { fontSize: 13, color: COLORS.navy, fontWeight: "600" },
 
-  // Police Services
-  quickServicesContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    overflow: 'hidden',
+  // Emergency
+  emergencyGrid: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 12,
   },
-  quickServiceCard: {
-    padding: 16,
-  },
-  quickServiceCardDisabled: {
-    opacity: 0.6,
-  },
-  quickServiceContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  quickServiceIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: '#F0F9FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  quickServiceIconContainerDisabled: {
-    backgroundColor: '#F3F4F6',
-  },
-  quickServiceTextContainer: {
+  emergencyCard: {
     flex: 1,
+    borderRadius: 12,
+    padding: 14,
+    position: "relative",
+    overflow: "hidden",
+    minHeight: 110,
   },
-  quickServiceTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#1E293B',
-    marginBottom: 4,
+  emergencyIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
   },
-  quickServiceTitleDisabled: {
-    color: '#9CA3AF',
+  emergencyTitle: {
+    fontSize: 13.5,
+    fontWeight: "700",
+    color: COLORS.white,
+    marginBottom: 3,
   },
-  quickServiceDescription: {
-    fontSize: 12,
-    color: '#6B7280',
-    lineHeight: 16,
-  },
-  quickServiceDescriptionDisabled: {
-    color: '#D1D5DB',
+  emergencySubtitle: { fontSize: 11, color: "rgba(255,255,255,0.85)" },
+  callBadge: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
-  // News Section - Horizontal Scroll
-  newsHorizontalScroll: {
-    marginHorizontal: -16,
+  // WhatsApp — separate section
+  whatsappSection: {
+    marginTop: 4,
   },
-  newsScrollContent: {
-    paddingHorizontal: 16,
+  whatsappLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+    gap: 8,
+  },
+  whatsappDivider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.border,
+  },
+  whatsappLabel: {
+    fontSize: 11,
+    color: COLORS.textLight,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  whatsappCard: {
+    backgroundColor: "#128C7E",
+    borderRadius: 12,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
-  newsCard: {
-    width: width * 0.65,
+  whatsappIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  whatsappTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.white,
+    marginBottom: 3,
+  },
+  whatsappSub: {
+    fontSize: 11.5,
+    color: "rgba(255,255,255,0.8)",
+  },
+  whatsappChevron: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // Quick Actions
+  quickActionsGrid: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 4,
+  },
+  quickActionCard: {
+    flex: 1,
+    backgroundColor: COLORS.white,
     borderRadius: 12,
-    overflow: 'hidden',
-    marginRight: 12,
-    borderWidth:0.5,
-    borderColor:"lightgray"
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  newsImageContainer: {
-    width: '100%',
-    height: 150,
-    overflow: 'hidden',
+  quickActionIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
   },
-  newsImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-    borderRadius:5,
-  },
-  newsContent: {
-    padding: 12,
-  },
-  newsHeader: {
-    flexDirection: 'column',
+  quickActionTitle: {
+    fontSize: 13.5,
+    fontWeight: "700",
+    color: COLORS.textDark,
     marginBottom: 4,
   },
-  newsTitle: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111827',
-    lineHeight: 18,
-    marginRight: 8,
-  },
-  newsDateContainer: {
+  quickActionSub: { fontSize: 11.5, color: COLORS.textMid, lineHeight: 15 },
 
-  },
-  newsDate: {
-    fontSize: 10,
-  },
-  newsDescription: {
-    fontSize: 12,
-    color: '#6B7280',
-    lineHeight: 16,
-  },
-  
-  // News Skeleton
-  newsSkeletonCard: {
-    width: width * 0.65,
-    backgroundColor: '#FFFFFF',
+  // Police Services
+  servicesList: {
+    backgroundColor: COLORS.white,
     borderRadius: 12,
-    overflow: 'hidden',
-    marginRight: 12,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  skeletonImage: {
-    width: '100%',
-    height: 140,
-    backgroundColor: '#E5E7EB',
+  serviceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+    gap: 12,
   },
-  skeletonContent: {
-    padding: 12,
+  serviceRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
+  serviceIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 9,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  serviceTitle: { fontSize: 14, fontWeight: "600", color: COLORS.textDark },
+  serviceDesc: { fontSize: 12, color: COLORS.textMid, marginTop: 2 },
+  soonBadge: {
+    backgroundColor: "#F1F5F9",
+    borderRadius: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  soonText: { fontSize: 10, color: COLORS.textMid, fontWeight: "600" },
+
+  // News
+  newsSection: {
+    backgroundColor: COLORS.white,
+    paddingVertical: 14,
+    marginBottom: 20,
+  },
+  newsScrollContent: { paddingHorizontal: 16, gap: 12 },
+  newsCard: {
+    width: width * 0.62,
+    borderRadius: 12,
+    backgroundColor: COLORS.white,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  newsImage: { width: "100%", height: 140, resizeMode: "cover" },
+  newsContent: { padding: 12 },
+  newsDate: { fontSize: 10.5, color: COLORS.textLight, marginBottom: 5 },
+  newsTitle: {
+    fontSize: 13.5,
+    fontWeight: "700",
+    color: COLORS.textDark,
+    lineHeight: 18,
+    marginBottom: 5,
+  },
+  newsDesc: { fontSize: 12, color: COLORS.textMid, lineHeight: 16 },
+  emptyNews: {
+    padding: 24,
+    alignItems: "center",
+  },
+  emptyNewsText: { fontSize: 13, color: COLORS.textLight },
+
+  // Skeleton
+  newsSkeletonCard: {
+    width: width * 0.62,
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  skeletonImage: { width: "100%", height: 140, backgroundColor: "#E2E8F0" },
   skeletonTitle: {
-    height: 16,
-    backgroundColor: '#E5E7EB',
+    height: 14,
+    backgroundColor: "#E2E8F0",
     borderRadius: 4,
     marginBottom: 8,
-    width: '80%',
+    width: "75%",
   },
   skeletonDescription: {
     height: 12,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: "#E2E8F0",
     borderRadius: 4,
-    marginBottom: 8,
-    width: '100%',
-  },
-  skeletonMeta: {
-    height: 10,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 4,
-    width: '40%',
-  },
-
-  // No News State
-  noNewsContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-  },
-  noNewsText: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
+    width: "100%",
   },
 
   // Footer
   footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.white,
     marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 30,
     borderRadius: 12,
-    padding: 16,
+    padding: 14,
     gap: 12,
+    borderWidth: 1,
+    marginBottom: 30,
+    borderColor: COLORS.border,
   },
-  footerText: {
-    flex: 1,
-    fontSize: 13,
-    color: '#6B7280',
-    lineHeight: 18,
-  },
+  footerText: { flex: 1, fontSize: 12.5, color: COLORS.textMid, lineHeight: 17 },
 
-  // Modal Styles
+  // Modal
   modalOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-  },
-  modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
+    position: "absolute",
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 24,
-    width: '100%',
-    maxWidth: 400,
-    alignItems: 'center',
   },
-  modalIcon: {
-    marginBottom: 16,
+  modalBox: {
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    padding: 28,
+    width: "100%",
+    maxWidth: 360,
+    alignItems: "center",
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 12,
-    textAlign: 'center',
+    fontWeight: "700",
+    color: COLORS.textDark,
+    marginBottom: 10,
   },
   modalMessage: {
-    fontSize: 16,
-    color: '#374151',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 8,
-  },
-  modalSubtitle: {
     fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginBottom: 20,
+    color: COLORS.textMid,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 24,
   },
   modalButton: {
-    backgroundColor: '#1E3A8A',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 6,
-    width: '100%',
-    alignItems: 'center',
+    backgroundColor: COLORS.navy,
+    paddingVertical: 13,
+    borderRadius: 10,
+    width: "100%",
+    alignItems: "center",
   },
-  modalButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  modalButtonText: { color: COLORS.white, fontSize: 15, fontWeight: "700" },
 });
 
 export default Home;

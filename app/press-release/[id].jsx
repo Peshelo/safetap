@@ -24,7 +24,7 @@ const { width } = Dimensions.get("window");
 export default function NewsDetails() {
   const { id } = useLocalSearchParams();
   const navigation = useNavigation();
-  const router = useRouter();
+  const router = useRouter(); 
 
   const [article, setArticle] = useState(null);
   const [loading, setLoading] = useState(true);

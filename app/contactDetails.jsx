@@ -29,7 +29,6 @@ const ContactDetails = () => {
   const [savingContact, setSavingContact] = useState(false);
   const [hasLocationData, setHasLocationData] = useState(false);
 
-  // Check if location data is available
   useEffect(() => {
     const lat = parseFloat(params.latitude);
     const lng = parseFloat(params.longitude);
@@ -37,18 +36,15 @@ const ContactDetails = () => {
     setHasLocationData(hasValidLocation);
   }, [params.latitude, params.longitude]);
 
-  // Format phone numbers for display
   const formatPhoneNumber = (number) => {
     if (!number) return '';
     const numStr = number.toString();
-    // Add + for international numbers
     if (numStr.includes('263') || numStr.startsWith('+')) {
       return numStr.startsWith('+') ? numStr : `+${numStr}`;
     }
     return numStr;
   };
 
-  // Format display text (remove underscores)
   const formatDisplayText = (text) => {
     if (!text) return '';
     return text
@@ -65,7 +61,6 @@ const ContactDetails = () => {
     }
     const formattedNumber = number.toString().startsWith('+') ? number : `+${number}`;
     const url = `https://wa.me/${formattedNumber}`;
-    
     Linking.openURL(url).catch(() => Alert.alert('Error', 'Could not open WhatsApp'));
   };
 
@@ -115,7 +110,6 @@ const ContactDetails = () => {
     try {
       setSavingContact(true);
       
-      // Request permissions
       const { status } = await Contacts.requestPermissionsAsync();
       
       if (status !== 'granted') {
@@ -130,16 +124,14 @@ const ContactDetails = () => {
         return;
       }
 
-      // Create contact object
       const contact = {
         [Contacts.Fields.FirstName]: '',
         [Contacts.Fields.LastName]: formatDisplayText(params.station),
         [Contacts.Fields.Organization]: 'Zimbabwe Republic Police',
         [Contacts.Fields.JobTitle]: 'Police Station',
-        [Contacts.Fields.Note]: `Station Information\nProvince: ${formatDisplayText(params.province)}\nDistrict: ${formatDisplayText(params.district)}\n${params.specialty ? `Specialty: ${formatDisplayText(params.specialty)}` : ''}`,
+        [Contacts.Fields.Note]: `Station Information\nProvince: ${formatDisplayText(params.province)}\nDistrict: ${formatDisplayText(params.district)}${params.specialty ? `\nSpecialty: ${formatDisplayText(params.specialty)}` : ''}`,
       };
 
-      // Add phone numbers
       const phoneNumbers = [];
       
       if (params.station_number) {
@@ -168,7 +160,6 @@ const ContactDetails = () => {
         contact[Contacts.Fields.PhoneNumbers] = phoneNumbers;
       }
 
-      // Add address if available
       if (params.address) {
         contact[Contacts.Fields.Addresses] = [{
           label: Contacts.Fields.Addresses.Work,
@@ -179,13 +170,11 @@ const ContactDetails = () => {
         }];
       }
 
-      // Add URL for ZRP
       contact[Contacts.Fields.UrlAddresses] = [{
         label: Contacts.Fields.UrlAddresses.HomePage,
         url: 'https://www.zrp.gov.zw',
       }];
 
-      // Create the contact
       const contactId = await Contacts.addContactAsync(contact);
       
       Alert.alert(
@@ -194,9 +183,7 @@ const ContactDetails = () => {
         [
           { 
             text: 'View Contact', 
-            onPress: () => {
-              Contacts.presentFormAsync(contactId);
-            }
+            onPress: () => Contacts.presentFormAsync(contactId)
           },
           { text: 'OK' }
         ]
@@ -236,8 +223,6 @@ const ContactDetails = () => {
 
       console.log('Report submitted:', reportData);
       
-      // In a real app, you would send this to your backend
-      // For now, we'll simulate a successful submission
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       Alert.alert(
@@ -262,7 +247,6 @@ const ContactDetails = () => {
     }
   };
 
-  // Contact info sections - Reordered for better flow
   const contactSections = [
     {
       title: 'Station Information',
@@ -285,14 +269,14 @@ const ContactDetails = () => {
           icon: 'phone-alt',
           color: '#1E3A8A'
         },
-        params.member_in_charge_number && { 
-          label: 'Officer in Charge', 
-          value: `${formatDisplayText(params.member_in_charge || '')} - ${formatPhoneNumber(params.member_in_charge_number)}`,
-          type: 'phone',
-          action: () => makePhoneCall(params.member_in_charge_number, 'Officer'),
-          icon: 'user-shield',
-          color: '#059669'
-        },
+        // params.member_in_charge_number && { 
+        //   label: 'Officer in Charge', 
+        //   value: `${formatDisplayText(params.member_in_charge || 'Officer')} - ${formatPhoneNumber(params.member_in_charge_number)}`,
+        //   type: 'phone',
+        //   action: () => makePhoneCall(params.member_in_charge_number, 'Officer'),
+        //   icon: 'user-shield',
+        //   color: '#059669'
+        // },
         params.whatsapp_number && { 
           label: 'WhatsApp', 
           value: formatPhoneNumber(params.whatsapp_number),
@@ -308,7 +292,7 @@ const ContactDetails = () => {
   const reportCategories = [
     { id: 'wrong_number', label: 'Wrong Phone Number', icon: 'phone' },
     { id: 'wrong_name', label: 'Wrong Station Name', icon: 'building' },
-    { id: 'wrong_location', label: 'Wrong Location', icon: 'map-marker' },
+    { id: 'wrong_location', label: 'Wrong Location', icon: 'map-marker-alt' },
     { id: 'wrong_officer', label: 'Wrong Officer Info', icon: 'user' },
     { id: 'station_closed', label: 'Station Closed', icon: 'door-closed' },
     { id: 'other', label: 'Other Issue', icon: 'exclamation-circle' },
@@ -319,7 +303,7 @@ const ContactDetails = () => {
       <Stack.Screen options={{ headerShown: false }} />
       <StatusBar barStyle="light-content" backgroundColor="#1E3A8A" />
       
-      {/* Simple Header */}
+      {/* Refined Header with Brand Color */}
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton}
@@ -333,18 +317,7 @@ const ContactDetails = () => {
             {formatDisplayText(params.station)}
           </Text>
         </View>
-        {/* <TouchableOpacity 
-          style={styles.saveButton}
-          onPress={saveToContacts}
-          disabled={savingContact}
-        >
-          {savingContact ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            // <Ionicons name="person-add" size={20} color="#FFFFFF" />
-            <></>
-          )}
-        </TouchableOpacity> */}
+        <View style={styles.headerRight} />
       </View>
 
       <ScrollView 
@@ -352,14 +325,14 @@ const ContactDetails = () => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Hero Section with Background */}
+        {/* Hero Section with Brand Background */}
         <View style={styles.heroContainer}>
           <ImageBackground
             source={require('../assets/images/fallback.png')}
-            style={styles.heroSection}
+            style={[styles.heroSection, styles.heroOverlay]}
             imageStyle={styles.heroBackground}
           >
-            <View style={styles.heroOverlay}>
+            <View>
               <View style={styles.heroContent}>
                 <View style={styles.stationLogo}>
                   <Image
@@ -375,7 +348,6 @@ const ContactDetails = () => {
                     {formatDisplayText(params.district)}, {formatDisplayText(params.province)}
                   </Text>
                   
-                  {/* Location Status */}
                   {hasLocationData && (
                     <View style={styles.locationStatus}>
                       <Ionicons name="location" size={12} color="rgba(255,255,255,0.9)" />
@@ -392,9 +364,8 @@ const ContactDetails = () => {
           </ImageBackground>
         </View>
 
-        {/* Quick Actions */}
+        {/* Quick Actions - Clean Card Design */}
         <View style={styles.quickActionsContainer}>
-          {/* <Text style={styles.sectionTitle}>Quick Actions</Text> */}
           <View style={styles.quickActions}>
             {params.station_number && (
               <TouchableOpacity 
@@ -408,7 +379,7 @@ const ContactDetails = () => {
               </TouchableOpacity>
             )}
             
-            {params.member_in_charge_number && (
+            {/* {params.member_in_charge_number && (
               <TouchableOpacity 
                 style={styles.quickActionButton}
                 onPress={() => makePhoneCall(params.member_in_charge_number, 'Officer')}
@@ -418,7 +389,7 @@ const ContactDetails = () => {
                 </View>
                 <Text style={styles.quickActionText}>Call OIC</Text>
               </TouchableOpacity>
-            )}
+            )} */}
             
             {hasLocationData && (
               <TouchableOpacity 
@@ -446,10 +417,10 @@ const ContactDetails = () => {
           </View>
         </View>
 
-        {/* Action Buttons Row */}
+        {/* Action Buttons */}
         <View style={styles.actionButtonsContainer}>
           <TouchableOpacity 
-            style={[styles.actionButton, { backgroundColor: '#1E3A8A' }]}
+            style={[styles.actionButton, styles.actionButtonPrimary]}
             onPress={saveToContacts}
             disabled={savingContact}
           >
@@ -458,23 +429,23 @@ const ContactDetails = () => {
             ) : (
               <>
                 <Ionicons name="person-add" size={20} color="#FFFFFF" />
-                <Text style={[styles.actionButtonText, { color: '#FFFFFF' }]}>Add to Contacts</Text>
+                <Text style={styles.actionButtonPrimaryText}>Add to Contacts</Text>
               </>
             )}
           </TouchableOpacity>
           
           {hasLocationData && (
             <TouchableOpacity 
-              style={[styles.actionButton, { backgroundColor: '#059669' }]}
+              style={[styles.actionButton, styles.actionButtonSuccess]}
               onPress={getDirections}
             >
               <FontAwesome5 name="directions" size={18} color="#FFFFFF" />
-              <Text style={[styles.actionButtonText, { color: '#FFFFFF' }]}>Get Directions</Text>
+              <Text style={styles.actionButtonSuccessText}>Get Directions</Text>
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Contact Details */}
+        {/* Contact Details - Clean Cards */}
         <View style={styles.detailsContainer}>
           {contactSections.map((section, sectionIndex) => (
             <View key={sectionIndex} style={styles.section}>
@@ -574,7 +545,7 @@ const ContactDetails = () => {
         </View>
       </ScrollView>
 
-      {/* Report Modal */}
+      {/* Report Modal - Clean Design */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -583,7 +554,6 @@ const ContactDetails = () => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            {/* Header */}
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Report Issue</Text>
               <TouchableOpacity 
@@ -600,7 +570,6 @@ const ContactDetails = () => {
                 <Text style={styles.modalStationName}>{formatDisplayText(params.station)}</Text>
               </Text>
 
-              {/* Category Selection */}
               <Text style={styles.modalSectionTitle}>What's wrong?</Text>
               <View style={styles.categoryGrid}>
                 {reportCategories.map((category) => (
@@ -614,7 +583,7 @@ const ContactDetails = () => {
                   >
                     <FontAwesome5 
                       name={category.icon} 
-                      size={16} 
+                      size={14} 
                       color={reportCategory === category.id ? '#DC2626' : '#6B7280'} 
                     />
                     <Text style={[
@@ -627,7 +596,6 @@ const ContactDetails = () => {
                 ))}
               </View>
 
-              {/* Details Input */}
               <Text style={styles.modalSectionTitle}>Details</Text>
               <TextInput
                 style={styles.reportInput}
@@ -636,10 +604,10 @@ const ContactDetails = () => {
                 value={reportText}
                 onChangeText={setReportText}
                 multiline={true}
+                numberOfLines={5}
                 textAlignVertical="top"
               />
 
-              {/* Submit Button */}
               <TouchableOpacity
                 style={[
                   styles.submitButton,
@@ -649,12 +617,9 @@ const ContactDetails = () => {
                 disabled={submittingReport || !reportCategory || !reportText.trim()}
               >
                 {submittingReport ? (
-                  <ActivityIndicator color="#fff" />
+                  <ActivityIndicator color="#FFFFFF" />
                 ) : (
-                  <View style={styles.submitButtonContent}>
-                    <Ionicons name="send" size={18} color="white" />
-                    <Text style={styles.submitButtonText}>Submit Report</Text>
-                  </View>
+                  <Text style={styles.submitButtonText}>Submit Report</Text>
                 )}
               </TouchableOpacity>
 
@@ -676,7 +641,7 @@ const styles = {
   },
   header: {
     backgroundColor: '#1E3A8A',
-    paddingTop: 50,
+    paddingTop: Platform.OS === 'ios' ? 60 : 20,
     paddingBottom: 12,
     paddingHorizontal: 16,
     flexDirection: 'row',
@@ -709,13 +674,8 @@ const styles = {
     textAlign: 'center',
     marginTop: 2,
   },
-  saveButton: {
+  headerRight: {
     width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   scrollView: {
     flex: 1,
@@ -728,15 +688,15 @@ const styles = {
     marginTop: 0,
   },
   heroSection: {
-    height: 150,
-    justifyContent: 'flex-end',
+    height: 180,
+    justifyContent: 'flex-center',
   },
   heroBackground: {
     opacity: 0.6,
     resizeMode: 'cover',
   },
   heroOverlay: {
-    backgroundColor: 'rgba(30, 58, 138, 0.65)',
+    backgroundColor: 'rgba(30, 58, 138, 0.75)',
     padding: 20,
     paddingTop: 30,
   },
@@ -760,13 +720,13 @@ const styles = {
     flex: 1,
   },
   stationName: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     color: '#FFFFFF',
     marginBottom: 6,
   },
   stationLocation: {
-    fontSize: 15,
+    fontSize: 14,
     color: 'rgba(255, 255, 255, 0.9)',
     lineHeight: 20,
     marginBottom: 4,
@@ -777,19 +737,18 @@ const styles = {
     marginTop: 2,
   },
   locationText: {
-    fontSize: 12,
+    fontSize: 11,
     color: 'rgba(255, 255, 255, 0.8)',
     marginLeft: 4,
   },
   heroTagline: {
-    fontSize: 13,
+    fontSize: 12,
     color: 'rgba(255, 255, 255, 0.8)',
     textAlign: 'center',
     fontStyle: 'italic',
-    
+    paddingTop: 15,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.2)',
-    
   },
   quickActionsContainer: {
     paddingHorizontal: 16,
@@ -801,12 +760,12 @@ const styles = {
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 20,
+    padding: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
   },
   quickActionButton: {
     alignItems: 'center',
@@ -814,17 +773,17 @@ const styles = {
     paddingHorizontal: 4,
   },
   quickActionIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   quickActionText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1E3A8A',
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#374151',
     textAlign: 'center',
   },
   actionButtonsContainer: {
@@ -838,14 +797,26 @@ const styles = {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 12,
     gap: 8,
   },
-  actionButtonText: {
+  actionButtonPrimary: {
+    backgroundColor: '#1E3A8A',
+  },
+  actionButtonPrimaryText: {
     fontSize: 14,
     fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  actionButtonSuccess: {
+    backgroundColor: '#059669',
+  },
+  actionButtonSuccessText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   detailsContainer: {
     paddingHorizontal: 16,
@@ -854,20 +825,17 @@ const styles = {
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1F2937',
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
     marginBottom: 12,
   },
   sectionCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
   },
   detailItem: {
     paddingVertical: 12,
@@ -878,9 +846,10 @@ const styles = {
   },
   detailLabel: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#9CA3AF',
     marginBottom: 4,
-    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   detailValueRow: {
     flexDirection: 'row',
@@ -888,7 +857,7 @@ const styles = {
     justifyContent: 'space-between',
   },
   detailValue: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#1F2937',
     fontWeight: '500',
     flex: 1,
@@ -899,22 +868,21 @@ const styles = {
     marginLeft: 8,
   },
   locationButton: {
-    marginTop: 12,
-    padding: 16,
-    backgroundColor: '#F0FDF4',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
+    marginTop: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 0,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
   },
   locationButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   locationIcon: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     borderRadius: 8,
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#ECFDF5',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -923,14 +891,14 @@ const styles = {
     flex: 1,
   },
   locationButtonTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '500',
     color: '#059669',
     marginBottom: 2,
   },
   locationButtonSubtitle: {
-    fontSize: 12,
-    color: '#6B7280',
+    fontSize: 11,
+    color: '#9CA3AF',
   },
   noticeContainer: {
     paddingHorizontal: 16,
@@ -939,26 +907,26 @@ const styles = {
   },
   noticeCard: {
     backgroundColor: '#FEF2F2',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 12,
+    padding: 16,
     borderWidth: 1,
     borderColor: '#FECACA',
   },
   noticeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   noticeTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#DC2626',
-    marginLeft: 10,
+    marginLeft: 8,
   },
   noticeText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#DC2626',
-    lineHeight: 20,
+    lineHeight: 18,
   },
   reportButtonContainer: {
     paddingHorizontal: 16,
@@ -966,41 +934,36 @@ const styles = {
   },
   reportButton: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 12,
+    padding: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    borderColor: '#F3F4F6',
   },
   reportButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   reportIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 10,
     backgroundColor: '#FEF2F2',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: 14,
   },
   reportTextContainer: {
     flex: 1,
   },
   reportTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     color: '#1F2937',
   },
   reportSubtitle: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#6B7280',
-    marginTop: 4,
+    marginTop: 2,
   },
   modalOverlay: {
     flex: 1,
@@ -1009,8 +972,8 @@ const styles = {
   },
   modalContent: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     maxHeight: '80%',
   },
   modalHeader: {
@@ -1022,8 +985,8 @@ const styles = {
     borderBottomColor: '#F3F4F6',
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '600',
     color: '#1F2937',
   },
   modalCloseButton: {
@@ -1033,19 +996,19 @@ const styles = {
     padding: 20,
   },
   modalDescription: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#6B7280',
     marginBottom: 24,
-    lineHeight: 22,
+    lineHeight: 20,
   },
   modalStationName: {
     fontWeight: '600',
     color: '#1F2937',
   },
   modalSectionTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#1F2937',
+    color: '#374151',
     marginBottom: 12,
   },
   categoryGrid: {
@@ -1057,8 +1020,8 @@ const styles = {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F9FAFB',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 20,
     marginRight: 8,
     marginBottom: 8,
@@ -1066,13 +1029,13 @@ const styles = {
     borderColor: '#E5E7EB',
   },
   categoryButtonActive: {
-    backgroundColor: '#FEE2E2',
-    borderColor: '#FCA5A5',
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
   },
   categoryText: {
     fontSize: 13,
     color: '#6B7280',
-    marginLeft: 8,
+    marginLeft: 6,
   },
   categoryTextActive: {
     color: '#DC2626',
@@ -1081,41 +1044,35 @@ const styles = {
   reportInput: {
     backgroundColor: '#F9FAFB',
     borderRadius: 12,
-    padding: 16,
-    fontSize: 15,
+    padding: 12,
+    fontSize: 14,
     color: '#1F2937',
     minHeight: 120,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     marginBottom: 24,
     textAlignVertical: 'top',
-    lineHeight: 20,
   },
   submitButton: {
     backgroundColor: '#DC2626',
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
     marginBottom: 16,
   },
   submitButtonDisabled: {
-    backgroundColor: '#9CA3AF',
-  },
-  submitButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    backgroundColor: '#FCA5A5',
   },
   submitButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#FFFFFF',
     fontWeight: '600',
-    marginLeft: 8,
   },
   modalFooter: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#9CA3AF',
     textAlign: 'center',
-    fontStyle: 'italic',
+    marginBottom: 20,
   },
 };
 

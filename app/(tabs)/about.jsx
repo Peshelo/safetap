@@ -14,130 +14,35 @@ import * as SecureStore from "expo-secure-store";
 import { TextInput } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useNavigation } from "@react-navigation/native";
 
 const About = () => {
-  const navigation = useNavigation();
   const router = useRouter();
-  
-  const [userInfo, setUserInfo] = useState({
-    emergencyContact: '',
-  });
-  const [isEditing, setIsEditing] = useState(false);
 
-  // Load saved user info
-  useEffect(() => {
-    const loadUserInfo = async () => {
-      try {
-        const savedInfo = await SecureStore.getItemAsync("userEmergencyInfo");
-        if (savedInfo) {
-          const parsedInfo = JSON.parse(savedInfo);
-          setUserInfo({
-            emergencyContact: parsedInfo.emergencyContact || '',
-          });
-        }
-      } catch (error) {
-        console.error("Failed to load user info", error);
-      }
-    };
-    loadUserInfo();
-  }, []);
-
-  const handleInputChange = (field, value) => {
-    setUserInfo((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const saveUserInfo = async () => {
-    try {
-      await SecureStore.setItemAsync(
-        "userEmergencyInfo",
-        JSON.stringify(userInfo)
-      );
-      Alert.alert("Success", "Your information has been saved securely");
-      setIsEditing(false);
-    } catch (error) {
-      Alert.alert("Error", "Failed to save your information");
-      console.error(error);
+  // Social media links for Zimbabwe Republic Police
+  const socialMediaLinks = [
+    {
+      id: "facebook",
+      name: "Facebook",
+      icon: "logo-facebook",
+      color: "#1877F2",
+      url: "https://www.facebook.com/ZimbabweRepublicPolice",
+      username: "@ZimbabweRepublicPolice",
+    },
+    {
+      id: "x",
+      name: "X",
+      icon: "logo-x",
+      color: "#000000",
+      url: "https://x.com/policezimbabwe",
+      username: "@ZRP",
     }
-  };
-
-  const resetUserInfo = async () => {
-    Alert.alert(
-      "Confirm Reset",
-      "Are you sure you want to delete all your personal information?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await SecureStore.deleteItemAsync("userEmergencyInfo");
-              setUserInfo({
-                emergencyContact: '',
-              });
-              Alert.alert("Success", "Your information has been deleted");
-            } catch (error) {
-              Alert.alert("Error", "Failed to delete your information");
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  // Menu sections (commented out for now)
-  /*
-  const menuSections = [
-    {
-      title: "Dashboard",
-      icon: "dashboard",
-      color: "#007AFF",
-      onPress: () => navigation.navigate("dashboard"),
-    },
-    {
-      title: "Information & Procedures",
-      icon: "info",
-      color: "#34C759",
-      onPress: () => navigation.navigate("information"),
-    },
-    {
-      title: "Change Language",
-      icon: "language",
-      color: "#AF52DE",
-      onPress: () => {
-        Alert.alert(
-          "Language Settings",
-          "Select your preferred language",
-          [
-            { text: "English", onPress: () => {} },
-            { text: "Shona", onPress: () => {} },
-            { text: "Ndebele", onPress: () => {} },
-            { text: "Cancel", style: "cancel" }
-          ]
-        );
-      },
-    },
-    {
-      title: "Walkthrough",
-      icon: "directions-walk",
-      color: "#FF9500",
-      onPress: () => navigation.navigate("walkthrough"),
-    },
-    {
-      title: "Report Criminal Complaint",
-      icon: "report",
-      color: "#FF3B30",
-      onPress: () => navigation.navigate("report"),
-    },
-    {
-      title: "About Us",
-      icon: "groups",
-      color: "#5856D6",
-      onPress: () => navigation.navigate("about-us"),
-    },
   ];
-  */
+
+  const openSocialMedia = (url) => {
+    Linking.openURL(url).catch(() => {
+      Alert.alert("Error", "Could not open the link");
+    });
+  };
 
   // App info section
   const appInfoSection = [
@@ -145,19 +50,19 @@ const About = () => {
       title: "Privacy Policy",
       icon: "policy",
       color: "#8E8E93",
-      onPress: () => Linking.openURL("https://zrp.gov.zw/privacy"),
+      onPress: () => Linking.openURL("https://zrp.gov.zw/safetap-privacy-policy"),
     },
     {
       title: "Terms of Service",
       icon: "description",
       color: "#8E8E93",
-      onPress: () => Linking.openURL("https://zrp.gov.zw/terms"),
+      onPress: () => Linking.openURL("https://zrp.gov.zw/safetap-terms-of-service"),
     },
     {
       title: "Help & Support",
       icon: "help",
       color: "#8E8E93",
-      // onPress: () => navigation.navigate("support"),
+      onPress: () => Linking.openURL("mailto:support@zrp.gov.zw"),
     },
   ];
 
@@ -174,7 +79,7 @@ const About = () => {
         >
           <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Settings</Text>
+        <Text style={styles.headerTitle}>About</Text>
         <View style={styles.headerRight} />
       </View>
 
@@ -185,8 +90,6 @@ const About = () => {
       >
         {/* App Information */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>About</Text>
-          
           <View style={styles.appInfo}>
             <Image
               source={require("../../assets/images/logo-alternate.png")}
@@ -204,90 +107,63 @@ const About = () => {
           </Text>
         </View>
 
-        {/* Emergency Contact Section */}
+        {/* Social Media Section */}
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Emergency Contact</Text>
-            {!isEditing ? (
-              <TouchableOpacity onPress={() => setIsEditing(true)}>
-                <Feather name="edit" size={20} color="#1E3A8A" />
+          <Text style={styles.sectionTitle}>Follow ZRP</Text>
+          <View style={styles.socialMediaContainer}>
+            {socialMediaLinks.map((social) => (
+              <TouchableOpacity
+                key={social.id}
+                style={styles.socialItem}
+                onPress={() => openSocialMedia(social.url)}
+                activeOpacity={0.7}
+              >
+                <View 
+                  style={[styles.socialIcon, { backgroundColor: `${social.color}15` }]}
+                >
+                  <Ionicons name={social.icon} size={28} color={social.color} />
+                </View>
+                <View style={styles.socialInfo}>
+                  <Text style={styles.socialName}>{social.name}</Text>
+                  <Text style={styles.socialUsername}>{social.username}</Text>
+                </View>
+                <Ionicons name="open-outline" size={20} color="#9CA3AF" />
               </TouchableOpacity>
-            ) : (
-              <TouchableOpacity onPress={saveUserInfo}>
-                <Ionicons name="checkmark" size={24} color="#059669" />
-              </TouchableOpacity>
-            )}
+            ))}
           </View>
-
-          {isEditing ? (
-            <View style={styles.editSection}>
-              <TextInput
-                style={styles.input}
-                placeholder="Emergency Contact Number (e.g. 0777723454)"
-                value={userInfo.emergencyContact}
-                onChangeText={(text) => handleInputChange("emergencyContact", text)}
-                keyboardType="phone-pad"
-              />
-              <View style={styles.buttonRow}>
-                <TouchableOpacity 
-                  style={styles.cancelButton}
-                  onPress={() => setIsEditing(false)}
-                >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.saveButton}
-                  onPress={saveUserInfo}
-                >
-                  <Text style={styles.saveButtonText}>Save</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.infoSection}>
-              <View style={styles.infoRow}>
-                <View style={styles.infoIcon}>
-                  <Ionicons name="call" size={20} color="#1E3A8A" />
-                </View>
-                <View style={styles.infoContent}>
-                  <Text style={styles.infoLabel}>Emergency Contact</Text>
-                  <Text style={styles.infoValue}>
-                    {userInfo.emergencyContact || "Not set"}
-                  </Text>
-                </View>
-              </View>
-              {userInfo.emergencyContact && (
-                <TouchableOpacity 
-                  style={styles.resetButton}
-                  onPress={resetUserInfo}
-                >
-                  <Ionicons name="trash-outline" size={18} color="#DC2626" />
-                  <Text style={styles.resetButtonText}>Clear Contact</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
         </View>
 
-        {/* Features Section - Commented out for now */}
-        {/*
+        {/* Contact Information */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Features</Text>
-          {menuSections.map((item, index) => (
-            <TouchableOpacity
-              key={index}
-              style={styles.listItem}
-              onPress={item.onPress}
-            >
-              <View style={[styles.listIcon, { backgroundColor: `${item.color}15` }]}>
-                <MaterialIcons name={item.icon} size={20} color={item.color} />
-              </View>
-              <Text style={styles.listText}>{item.title}</Text>
-              <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
-            </TouchableOpacity>
-          ))}
+          <Text style={styles.sectionTitle}>Contact Information</Text>          
+          <TouchableOpacity 
+            style={styles.contactItem}
+            onPress={() => Linking.openURL("mailto:info@zrp.gov.zw")}
+          >
+            <View style={[styles.contactIcon, { backgroundColor: "#EFF6FF" }]}>
+              <Ionicons name="mail" size={20} color="#1E3A8A" />
+            </View>
+            <View style={styles.contactInfo}>
+              <Text style={styles.contactLabel}>Email</Text>
+              <Text style={styles.contactValue}>info@zrp.gov.zw</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.contactItem}
+            onPress={() => Linking.openURL("https://www.zrp.gov.zw")}
+          >
+            <View style={[styles.contactIcon, { backgroundColor: "#EFF6FF" }]}>
+              <Ionicons name="globe" size={20} color="#1E3A8A" />
+            </View>
+            <View style={styles.contactInfo}>
+              <Text style={styles.contactLabel}>Website</Text>
+              <Text style={styles.contactValue}>www.zrp.gov.zw</Text>
+            </View>
+            <Ionicons name="open-outline" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
         </View>
-        */}
 
         {/* App Info Links */}
         <View style={styles.section}>
@@ -364,133 +240,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#f1f5f9",
   },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
-  },
   sectionTitle: {
     fontSize: 16,
     fontWeight: "600",
     color: "#111827",
     paddingHorizontal: 16,
     paddingVertical: 16,
-  },
-  editSection: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
-  },
-  input: {
-    backgroundColor: "#f9fafb",
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: "#111827",
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-  },
-  buttonRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  cancelButton: {
-    flex: 1,
-    padding: 12,
-    backgroundColor: "#f3f4f6",
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#6B7280",
-  },
-  saveButton: {
-    flex: 1,
-    padding: 12,
-    backgroundColor: "#1E3A8A",
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  saveButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#FFFFFF",
-  },
-  infoSection: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
-  },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  infoIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: "#eff6ff",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  infoContent: {
-    flex: 1,
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: "#6B7280",
-    marginBottom: 2,
-  },
-  infoValue: {
-    fontSize: 16,
-    color: "#111827",
-    fontWeight: "500",
-  },
-  resetButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    padding: 12,
-    backgroundColor: "#fef2f2",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#fee2e2",
-  },
-  resetButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#DC2626",
-  },
-  listItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
-  },
-  listIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  listText: {
-    flex: 1,
-    fontSize: 16,
-    color: "#374151",
   },
   appInfo: {
     flexDirection: "row",
@@ -532,6 +287,91 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#f1f5f9",
+  },
+  // Social Media Styles
+  socialMediaContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  socialItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  socialIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 14,
+  },
+  socialInfo: {
+    flex: 1,
+  },
+  socialName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111827",
+    marginBottom: 2,
+  },
+  socialUsername: {
+    fontSize: 13,
+    color: "#6B7280",
+  },
+  // Contact Styles
+  contactItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  contactIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 14,
+  },
+  contactInfo: {
+    flex: 1,
+  },
+  contactLabel: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginBottom: 2,
+  },
+  contactValue: {
+    fontSize: 15,
+    color: "#111827",
+    fontWeight: "500",
+  },
+  // List Item Styles
+  listItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  listIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  listText: {
+    flex: 1,
+    fontSize: 16,
+    color: "#374151",
   },
   footer: {
     padding: 24,

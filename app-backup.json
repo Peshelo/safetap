@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "safetap",
+    "name": "ZRP SafeTap",
     "slug": "safetap",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -9,18 +9,20 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.peshelgomo.safetap"
     },
     "android": {
-      "permissions": [
-        "android.permission.CALL_PHONE",
-        "android.permission.READ_CONTACTS",
-        "android.permission.WRITE_CONTACTS"
-      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyA82Yl2br0eJQLlHUIHgAe0L0d5YV7cuZU"
+        }
+      },
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+
       "package": "com.peshelgomo.safetap"
     },
     "web": {
