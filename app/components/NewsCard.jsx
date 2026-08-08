@@ -4,60 +4,28 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
-  ActivityIndicator,
 } from "react-native";
 import React from "react";
 import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
-import pb from "../../lib/connection";
+import { resolveMediaUrl } from "../../lib/api";
 
 const NewsCard = ({
   item,
   onPress,
   showDescription = false,
   showTag = true,
-  showFooter = true,
   cardStyle = {},
   compact = false,
-  showPreviewButton = false,
   showImage = true,
   showDate = true,
 }) => {
-  const getFileUrl = (item) => {
-    if (!item.file) return null;
-    return pb.files.getURL(item, item.file);
-  };
-
-  const getFileType = (url) => {
-    if (!url) return null;
-    const extension = url.split(".").pop().toLowerCase();
-    if (["jpg", "jpeg", "png", "gif", "webp"].includes(extension)) return "image";
-    if (extension === "pdf") return "pdf";
-    return null;
-  };
-
-  const fileUrl = getFileUrl(item);
-  const fileType = getFileType(fileUrl);
-  const hasFile = !!item.file;
+  const fileUrl = resolveMediaUrl(item.cover_image_url || item.file);
 
   const getHumanFriendlyDate = (dateString) => {
+    if (!dateString) return "Recently";
     try {
       const date = new Date(dateString);
-      const now = new Date();
-      const diffTime = Math.abs(now - date);
-      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-      const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
-      const diffMinutes = Math.floor(diffTime / (1000 * 60));
-
-      if (diffMinutes < 1) return "Just now";
-      if (diffMinutes < 60) return `${diffMinutes}m ago`;
-      if (diffHours < 24) return `${diffHours}h ago`;
-      if (diffDays < 7) return `${diffDays}d ago`;
-      if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
-      
-      return date.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      });
+      return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
     } catch (error) {
       return "Recently";
     }
@@ -65,24 +33,21 @@ const NewsCard = ({
 
   const formatDescription = (text) => {
     if (!text) return "";
-    // Remove HTML tags and trim
     const cleanText = text.replace(/<[^>]*>/g, "").trim();
-    // Limit to 100 characters for preview
     if (cleanText.length > 100) {
       return cleanText.substring(0, 100) + "...";
     }
     return cleanText;
   };
 
-  // If compact mode is enabled
   if (compact) {
     return (
       <TouchableOpacity
         onPress={() => onPress?.(item)}
         style={[styles.compactCard, cardStyle]}
-        activeOpacity={0.7}
+        activeOpacity={0.8}
       >
-        {hasFile && fileType === "image" && showImage && (
+        {fileUrl && showImage && (
           <Image
             source={{ uri: fileUrl }}
             style={styles.compactImage}
@@ -92,7 +57,7 @@ const NewsCard = ({
         <View style={styles.compactContent}>
           {showTag && (
             <View style={styles.tagContainer}>
-              <Text style={styles.tagText}>NEWS</Text>
+              <Text style={styles.tagText}>{item.category || "PRESS"}</Text>
             </View>
           )}
           <Text style={styles.compactTitle} numberOfLines={2}>
@@ -103,14 +68,9 @@ const NewsCard = ({
               <View style={styles.timeContainer}>
                 <Ionicons name="time-outline" size={12} color="#6B7280" />
                 <Text style={styles.metaText}>
-                  {getHumanFriendlyDate(item.created)}
+                  {getHumanFriendlyDate(item.published_at || item.created_at)}
                 </Text>
               </View>
-              {item.description && (
-                <Text style={styles.previewText} numberOfLines={1}>
-                  {formatDescription(item.description)}
-                </Text>
-              )}
             </View>
           )}
         </View>
@@ -118,68 +78,52 @@ const NewsCard = ({
     );
   }
 
-  // Standard article card for homepage
   return (
     <TouchableOpacity
       onPress={() => onPress?.(item)}
       style={[styles.card, cardStyle]}
-      activeOpacity={0.7}
+      activeOpacity={0.8}
     >
-      {/* Article Image */}
-      {hasFile && fileType === "image" && showImage && (
+      {fileUrl && showImage && (
         <Image
           source={{ uri: fileUrl }}
           style={styles.articleImage}
           resizeMode="cover"
         />
       )}
-      
+
       <View style={styles.cardContent}>
-        {/* Article Header */}
         <View style={styles.cardHeader}>
           {showTag && (
             <View style={styles.articleTag}>
-              <Text style={styles.articleTagText}>NEWS</Text>
+              <Text style={styles.articleTagText}>{item.category || "PRESS RELEASE"}</Text>
             </View>
           )}
           {showDate && (
             <View style={styles.dateContainer}>
               <Ionicons name="time-outline" size={12} color="#6B7280" />
               <Text style={styles.dateText}>
-                {getHumanFriendlyDate(item.created)}
+                {getHumanFriendlyDate(item.published_at || item.created_at)}
               </Text>
             </View>
           )}
         </View>
 
-        {/* Article Title */}
         <Text style={styles.articleTitle} numberOfLines={2}>
           {item.title}
         </Text>
 
-        {/* Article Preview */}
-        {item.description && (
+        {(item.summary || item.description) && (
           <Text style={styles.articlePreview} numberOfLines={2}>
-            {formatDescription(item.description)}
+            {formatDescription(item.summary || item.description)}
           </Text>
         )}
 
-        {/* Article Footer */}
         <View style={styles.cardFooter}>
           <View style={styles.readMoreContainer}>
             <Text style={styles.readMoreText}>Read full article</Text>
-            <Ionicons name="arrow-forward" size={14} color="#3B82F6" />
+            <Ionicons name="arrow-forward" size={14} color="#0052CC" />
           </View>
-          
-          {hasFile && (
-            <View style={styles.attachmentIndicator}>
-              <FontAwesome5 
-                name={fileType === "image" ? "image" : "file-pdf"} 
-                size={12} 
-                color="#6B7280" 
-              />
-            </View>
-          )}
         </View>
       </View>
     </TouchableOpacity>
@@ -187,27 +131,21 @@ const NewsCard = ({
 };
 
 const styles = StyleSheet.create({
-  // Standard Article Card
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 8,
+    borderRadius: 10,
     overflow: 'hidden',
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#E2E8F0',
   },
   articleImage: {
     width: '100%',
-    height: 160,
-    backgroundColor: '#F3F4F6',
+    height: 150,
+    backgroundColor: '#F1F5F9',
   },
   cardContent: {
-    padding: 16,
+    padding: 14,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -216,16 +154,15 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   articleTag: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#E6EFFC',
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderRadius: 4,
   },
   articleTagText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#1E40AF',
-    letterSpacing: 0.5,
+    color: '#0052CC',
   },
   dateContainer: {
     flexDirection: 'row',
@@ -234,29 +171,28 @@ const styles = StyleSheet.create({
   },
   dateText: {
     fontSize: 11,
-    color: '#6B7280',
-    fontWeight: '500',
+    color: '#64748B',
   },
   articleTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#111827',
-    lineHeight: 22,
-    marginBottom: 8,
+    color: '#0F172A',
+    lineHeight: 20,
+    marginBottom: 6,
   },
   articlePreview: {
-    fontSize: 14,
-    color: '#4B5563',
-    lineHeight: 20,
-    marginBottom: 12,
+    fontSize: 13,
+    color: '#475569',
+    lineHeight: 18,
+    marginBottom: 10,
   },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 12,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderTopColor: '#F1F5F9',
   },
   readMoreContainer: {
     flexDirection: 'row',
@@ -264,87 +200,40 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   readMoreText: {
-    fontSize: 13,
-    color: '#3B82F6',
-    fontWeight: '600',
+    fontSize: 12,
+    color: '#0052CC',
+    fontWeight: '700',
   },
-  attachmentIndicator: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // Compact Card Styles
   compactCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 8,
-    padding: 12,
+    padding: 10,
     marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
     borderWidth: 1,
-    borderColor: '#F3F4F6',
+    borderColor: '#E2E8F0',
   },
   compactImage: {
-    width: 60,
-    height: 60,
+    width: 56,
+    height: 56,
     borderRadius: 6,
-    marginRight: 12,
-    backgroundColor: '#F3F4F6',
+    marginRight: 10,
   },
-  compactContent: {
-    flex: 1,
-  },
+  compactContent: { flex: 1 },
   tagContainer: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#E6EFFC',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
     alignSelf: 'flex-start',
     marginBottom: 4,
   },
-  tagText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#1E40AF',
-    letterSpacing: 0.5,
-  },
-  compactTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111827',
-    lineHeight: 18,
-    marginBottom: 4,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  timeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  metaText: {
-    fontSize: 11,
-    color: '#6B7280',
-  },
-  previewText: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    flex: 1,
-    marginLeft: 8,
-    textAlign: 'right',
-  },
+  tagText: { fontSize: 9, fontWeight: '700', color: '#0052CC' },
+  compactTitle: { fontSize: 13, fontWeight: "600", color: "#0F172A", marginBottom: 4 },
+  metaRow: { flexDirection: 'row', alignItems: 'center' },
+  timeContainer: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  metaText: { fontSize: 11, color: '#64748B' },
 });
 
 export default NewsCard;

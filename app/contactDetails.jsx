@@ -12,29 +12,122 @@ import {
   Image,
   ImageBackground,
   StatusBar,
-  Platform
+  Platform,
+  Share
 } from 'react-native';
 import { FontAwesome5, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Contacts from 'expo-contacts';
+import offlineContactService from '../src/services/offlineContactService';
+import AppHeader from '../src/components/AppHeader';
+import OfflineQRCode from '../src/components/OfflineQRCode';
+import { addRecentStation } from '../src/services/recentStationsService';
+import { useAppTheme } from '../src/context/ThemeContext';
 
 const ContactDetails = () => {
+  const { colors, isDark } = useAppTheme();
+
   const params = useLocalSearchParams();
   const router = useRouter();
   
   const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [qrModalVisible, setQrModalVisible] = useState(false);
   const [reportText, setReportText] = useState('');
   const [reportCategory, setReportCategory] = useState('');
   const [submittingReport, setSubmittingReport] = useState(false);
   const [savingContact, setSavingContact] = useState(false);
   const [hasLocationData, setHasLocationData] = useState(false);
+  const [isSavedOffline, setIsSavedOffline] = useState(false);
+
+  useEffect(() => {
+    if (params && params.id && params.station) {
+      addRecentStation({
+        id: params.id,
+        name: params.station,
+        province: params.province,
+        district: params.district,
+        phone: params.station_number,
+        whatsapp: params.whatsapp_number,
+        latitude: params.latitude,
+        longitude: params.longitude,
+        address: params.address,
+      });
+    }
+  }, [params]);
+
+  const getStationVCardString = () => {
+    const name = params.station ? params.station.replace(/_/g, ' ') : 'ZRP Police Station';
+    const phone = params.station_number || '';
+    const whatsapp = params.whatsapp_number || '';
+    const district = params.district ? params.district.replace(/_/g, ' ') : '';
+    const province = params.province ? params.province.replace(/_/g, ' ') : '';
+    const lat = params.latitude;
+    const lng = params.longitude;
+
+    const lines = [
+      'BEGIN:VCARD',
+      'VERSION:3.0',
+      `FN:${name}`,
+      'ORG:Zimbabwe Republic Police',
+      'TITLE:Police Station',
+    ];
+    if (phone) lines.push(`TEL;TYPE=WORK,VOICE:${phone}`);
+    if (whatsapp) lines.push(`TEL;TYPE=CELL,VOICE,WHATSAPP:${whatsapp}`);
+    if (district || province) lines.push(`ADR;TYPE=WORK:;;${district};${province};;;Zimbabwe`);
+    if (lat && lng) lines.push(`GEO:${lat};${lng}`);
+    lines.push(`NOTE:Station Code: ${phone} | Official ZRP Contact`);
+    lines.push('END:VCARD');
+    return lines.join('\n');
+  };
+
 
   useEffect(() => {
     const lat = parseFloat(params.latitude);
     const lng = parseFloat(params.longitude);
     const hasValidLocation = !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0;
     setHasLocationData(hasValidLocation);
-  }, [params.latitude, params.longitude]);
+
+    if (params.id) {
+      offlineContactService.isStationSavedOffline(params.id).then(setIsSavedOffline);
+    }
+  }, [params.id, params.latitude, params.longitude]);
+
+  const toggleOfflineBookmark = async () => {
+    if (!params.id) return;
+    const newState = await offlineContactService.toggleStationOffline({
+      id: params.id,
+      name: params.station,
+      province: params.province,
+      district: params.district,
+      station_number: params.station_number,
+      member_in_charge_number: params.member_in_charge_number,
+      whatsapp_number: params.whatsapp_number,
+      latitude: params.latitude,
+      longitude: params.longitude,
+      address: params.address,
+    });
+    setIsSavedOffline(newState);
+    Alert.alert(
+      newState ? 'Saved Offline' : 'Removed from Offline',
+      newState
+        ? `${params.station} is now saved for offline access anytime.`
+        : `${params.station} has been removed from offline saved contacts.`
+    );
+  };
+
+  const handleShareStationDetails = async () => {
+    try {
+      const stationName = formatDisplayText(params.station) || 'ZRP Police Station';
+      const phone = params.station_number || '';
+      const message = `ZRP Police Station: ${stationName}\nProvince: ${formatDisplayText(params.province)}\nDistrict: ${formatDisplayText(params.district)}\nPhone: ${phone || 'Emergency 999'}${params.whatsapp_number ? `\nWhatsApp: ${params.whatsapp_number}` : ''}\nLocation: https://maps.google.com/?q=${params.latitude},${params.longitude}`;
+      await Share.share({
+        title: stationName,
+        message,
+      });
+    } catch (error) {
+      console.log('Share details error:', error);
+    }
+  };
 
   const formatPhoneNumber = (number) => {
     if (!number) return '';
@@ -124,26 +217,30 @@ const ContactDetails = () => {
         return;
       }
 
+      const stationName = formatDisplayText(params.station) || 'ZRP Police Station';
+
       const contact = {
-        [Contacts.Fields.FirstName]: '',
-        [Contacts.Fields.LastName]: formatDisplayText(params.station),
-        [Contacts.Fields.Organization]: 'Zimbabwe Republic Police',
-        [Contacts.Fields.JobTitle]: 'Police Station',
-        [Contacts.Fields.Note]: `Station Information\nProvince: ${formatDisplayText(params.province)}\nDistrict: ${formatDisplayText(params.district)}${params.specialty ? `\nSpecialty: ${formatDisplayText(params.specialty)}` : ''}`,
+        contactType: Contacts.ContactTypes.Person,
+        name: stationName,
+        firstName: stationName,
+        lastName: 'ZRP',
+        company: 'Zimbabwe Republic Police',
+        jobTitle: 'Police Station',
+        note: `ZRP Station Information\nProvince: ${formatDisplayText(params.province)}\nDistrict: ${formatDisplayText(params.district)}${params.specialty ? `\nSpecialty: ${formatDisplayText(params.specialty)}` : ''}`,
       };
 
       const phoneNumbers = [];
       
       if (params.station_number) {
         phoneNumbers.push({
-          label: Contacts.Fields.PhoneNumbers.Work,
+          label: 'work',
           number: params.station_number.toString(),
         });
       }
       
       if (params.member_in_charge_number) {
         phoneNumbers.push({
-          label: Contacts.Fields.PhoneNumbers.Mobile,
+          label: 'mobile',
           number: params.member_in_charge_number.toString(),
           isPrimary: true,
         });
@@ -151,18 +248,18 @@ const ContactDetails = () => {
       
       if (params.whatsapp_number) {
         phoneNumbers.push({
-          label: Contacts.Fields.PhoneNumbers.Other,
+          label: 'work',
           number: params.whatsapp_number.toString(),
         });
       }
       
       if (phoneNumbers.length > 0) {
-        contact[Contacts.Fields.PhoneNumbers] = phoneNumbers;
+        contact.phoneNumbers = phoneNumbers;
       }
 
       if (params.address) {
-        contact[Contacts.Fields.Addresses] = [{
-          label: Contacts.Fields.Addresses.Work,
+        contact.addresses = [{
+          label: 'work',
           street: params.address,
           city: formatDisplayText(params.district),
           region: formatDisplayText(params.province),
@@ -170,20 +267,49 @@ const ContactDetails = () => {
         }];
       }
 
-      contact[Contacts.Fields.UrlAddresses] = [{
-        label: Contacts.Fields.UrlAddresses.HomePage,
+      contact.urlAddresses = [{
+        label: 'homepage',
         url: 'https://www.zrp.gov.zw',
       }];
 
       const contactId = await Contacts.addContactAsync(contact);
       
+      // Auto-save offline locally
+      try {
+        await offlineContactService.saveStationOffline({
+          id: params.id,
+          name: params.station,
+          province: params.province,
+          district: params.district,
+          station_number: params.station_number,
+          member_in_charge_number: params.member_in_charge_number,
+          whatsapp_number: params.whatsapp_number,
+          latitude: params.latitude,
+          longitude: params.longitude,
+          address: params.address,
+        });
+        setIsSavedOffline(true);
+      } catch (e) {}
+      
+      // Track telemetry event
+      try {
+        const analyticsService = require('../src/services/analyticsService').default;
+        analyticsService.trackFeature(`Save Contact: ${stationName}`);
+      } catch (e) {}
+
       Alert.alert(
-        'Success',
-        `${formatDisplayText(params.station)} has been added to your contacts.`,
+        'Contact Saved',
+        `${stationName} has been saved to your device contacts.`,
         [
           { 
             text: 'View Contact', 
-            onPress: () => Contacts.presentFormAsync(contactId)
+            onPress: async () => {
+              try {
+                await Contacts.presentFormAsync(contactId);
+              } catch (formErr) {
+                console.log('Unable to present contact form:', formErr);
+              }
+            }
           },
           { text: 'OK' }
         ]
@@ -191,7 +317,7 @@ const ContactDetails = () => {
       
     } catch (error) {
       console.error('Error saving contact:', error);
-      Alert.alert('Error', 'Failed to save contact. Please try again.');
+      Alert.alert('Error', 'Failed to save contact. Please verify contacts permission in settings and try again.');
     } finally {
       setSavingContact(false);
     }
@@ -303,22 +429,18 @@ const ContactDetails = () => {
       <Stack.Screen options={{ headerShown: false }} />
       <StatusBar barStyle="light-content" backgroundColor="#1E3A8A" />
       
-      {/* Refined Header with Brand Color */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>Station Details</Text>
-          <Text style={styles.headerSubtitle} numberOfLines={1}>
-            {formatDisplayText(params.station)}
-          </Text>
-        </View>
-        <View style={styles.headerRight} />
-      </View>
+      {/* App Bar (ZRP Blue with logo and safe area top inset) */}
+      <AppHeader
+        title="Station Details"
+        subtitle={formatDisplayText(params.station)}
+        showBack={true}
+        rightActions={[
+          {
+            iconName: "share-social-outline",
+            onPress: handleShareStationDetails,
+          },
+        ]}
+      />
 
       <ScrollView 
         style={styles.scrollView} 
@@ -414,8 +536,19 @@ const ContactDetails = () => {
                 <Text style={styles.quickActionText}>WhatsApp</Text>
               </TouchableOpacity>
             )}
+
+            <TouchableOpacity 
+              style={styles.quickActionButton}
+              onPress={() => setQrModalVisible(true)}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: '#E6EFFC' }]}>
+                <Ionicons name="qr-code-outline" size={20} color="#0052CC" />
+              </View>
+              <Text style={styles.quickActionText}>QR Card</Text>
+            </TouchableOpacity>
           </View>
         </View>
+
 
         {/* Action Buttons */}
         <View style={styles.actionButtonsContainer}>
@@ -630,9 +763,53 @@ const ContactDetails = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Station QR Contact Card Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={qrModalVisible}
+        onRequestClose={() => setQrModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface, borderRadius: 7, borderWidth: 1, borderColor: colors.border, alignItems: 'center', paddingVertical: 24 }]}>
+            <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Station QR Contact Card</Text>
+              <TouchableOpacity onPress={() => setQrModalVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ padding: 12, backgroundColor: '#FFFFFF', borderRadius: 7, borderWidth: 1, borderColor: colors.border, marginVertical: 12, alignItems: 'center' }}>
+              <OfflineQRCode
+                value={getStationVCardString()}
+                size={210}
+              />
+            </View>
+
+            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.textPrimary, textAlign: 'center', marginTop: 8 }}>
+              {formatDisplayText(params.station)}
+            </Text>
+            <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '600', marginTop: 4 }}>
+              Code: {params.station_number || 'ZRP-STN'}
+            </Text>
+            <Text style={{ fontSize: 12, color: colors.textMuted, textAlign: 'center', marginHorizontal: 20, marginTop: 12 }}>
+              Scan with any mobile phone camera to instantly import station contact details and emergency numbers.
+            </Text>
+
+            <TouchableOpacity
+              style={[styles.submitButton, { backgroundColor: '#1E3A8A', marginTop: 20, width: '100%' }]}
+              onPress={() => setQrModalVisible(false)}
+            >
+              <Text style={styles.submitButtonText}>Close QR Card</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
+
 
 const styles = {
   container: {
@@ -711,7 +888,7 @@ const styles = {
   logoImage: {
     width: 70,
     height: 70,
-    borderRadius: 14,
+    borderRadius: 12,
     backgroundColor: '#FFFFFF',
     borderWidth: 3,
     borderColor: '#FFFFFF',
@@ -759,7 +936,7 @@ const styles = {
     flexDirection: 'row',
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -826,8 +1003,8 @@ const styles = {
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
+    fontWeight: '700',
+    color: '#1E3A8A',
     marginBottom: 12,
   },
   sectionCard: {

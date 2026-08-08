@@ -19,6 +19,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Stack, useRouter } from "expo-router";
+import AppHeader from "../../src/components/AppHeader";
 
 // Fixed JSON data for emergency contacts in Zimbabwe
 const emergencyContactsData = {
@@ -723,17 +724,12 @@ const AllEmergencyContacts = () => {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Stack.Screen options={{ headerShown: false }} />
       
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Emergency Contacts</Text>
-        <View style={styles.headerRight} />
-      </View>
+      {/* App Bar (ZRP Blue with logo and safe area top inset) */}
+      <AppHeader
+        title="Emergency Contacts"
+        subtitle="National Emergency Directory"
+        showBack={true}
+      />
 
       <View style={styles.container}>
         {/* Search Bar */}
@@ -1092,8 +1088,8 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: "600",
-    color: "#2d3748",
+    fontWeight: "700",
+    color: "#1E3A8A",
   },
   sectionCount: {
     fontSize: 14,

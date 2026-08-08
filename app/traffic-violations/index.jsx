@@ -15,9 +15,9 @@ import {
 import React, { useState, useEffect } from "react";
 import { router, Stack } from "expo-router";
 import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
-import pb from "../../lib/connection";
+import api from "../../src/services/api";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import CustomHeader from "../components/Header";
+import AppHeader from "../../src/components/AppHeader";
 import { useNavigation } from "@react-navigation/native";
 
 const TrafficViolations = () => {
@@ -35,10 +35,8 @@ const TrafficViolations = () => {
   const fetchAllViolations = async () => {
     try {
       setLoading(true);
-      const records = await pb.collection("traffic_violations").getFullList({
-        sort: "-created",
-      });
-      setViolations(records);
+      const res = await api.trafficViolations.list({ page: 1, page_size: 50 });
+      setViolations(res.items || []);
     } catch (err) {
       setError("Failed to fetch traffic violations");
       console.error(err);
@@ -59,13 +57,8 @@ const TrafficViolations = () => {
       setSearchLoading(true);
       setError(null);
 
-      // Search for violations with the specific licence number
-      const records = await pb.collection("traffic_violations").getFullList({
-        filter: `licence_number = "${licenceNumber.trim()}"`,
-        sort: "-created",
-      });
-
-      setViolations(records);
+      const res = await api.trafficViolations.getByLicence(licenceNumber.trim());
+      setViolations(res.items || []);
       setHasSearched(true);
     } catch (err) {
       setError("Failed to search for violations");
@@ -261,12 +254,10 @@ const TrafficViolations = () => {
         }}
       />
 
-      <CustomHeader
+      <AppHeader
         title="Traffic Violations"
         subtitle="Check and manage your traffic violations"
-        showBackButton={true}
-        onBack={() => navigation.goBack()}
-        showLogo={false}
+        showBack={true}
       />
 
       <ScrollView
@@ -284,7 +275,7 @@ const TrafficViolations = () => {
         <View className="px-5 pt-6">
           {/* Header */}
           <View className="mb-6">
-            <Text className="text-2xl font-bold text-gray-900 mb-2">
+            <Text className="text-2xl font-bold text-blue-900 mb-2">
               Check Traffic Violations
             </Text>
             <Text className="text-gray-600">
@@ -294,7 +285,7 @@ const TrafficViolations = () => {
 
           {/* Search Section */}
           <View className="bg-white rounded-xl p-4 mb-6 shadow-sm">
-            <Text className="text-lg font-semibold text-gray-900 mb-3">
+            <Text className="text-lg font-semibold text-blue-900 mb-3">
               Search by Licence Number
             </Text>
 
@@ -327,7 +318,7 @@ const TrafficViolations = () => {
           {hasSearched && (
             <View className="mb-6">
               <View className="flex-row justify-between items-center mb-4">
-                <Text className="text-xl font-bold text-gray-900">
+                <Text className="text-xl font-bold text-blue-900">
                   Search Results
                 </Text>
                 {violations.length > 0 && (

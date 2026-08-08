@@ -13,8 +13,8 @@ import {
 import { FontAwesome5, Ionicons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import * as SecureStore from "expo-secure-store";
-import pb from "../../../lib/connection";
+import api from "../../../lib/api";
+import AppHeader from "../../../src/components/AppHeader";
 
 const commentTypes = [
   { label: "Comment", value: "COMMENT" },
@@ -30,25 +30,6 @@ const Case = () => {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [success, setSuccess] = useState(false);
-  const [userPhoneNumber, setUserPhoneNumber] = useState("");
-
-  // Load user's emergency contact phone number
-  useEffect(() => {
-    const loadUserPhoneNumber = async () => {
-      try {
-        const savedInfo = await SecureStore.getItemAsync("userEmergencyInfo");
-        if (savedInfo) {
-          const parsedInfo = JSON.parse(savedInfo);
-          if (parsedInfo.emergencyContact) {
-            setUserPhoneNumber(parsedInfo.emergencyContact);
-          }
-        }
-      } catch (error) {
-        console.error("Failed to load user phone number", error);
-      }
-    };
-    loadUserPhoneNumber();
-  }, []);
 
   const validate = () => {
     const newErrors = {};
@@ -66,24 +47,21 @@ const Case = () => {
     setLoading(true);
     try {
       const data = {
-        comment: message,
-        flag: commentType,
-        case: params.case || "general",
-        user_phone: userPhoneNumber || null, // Include user's phone number if available
-        timestamp: new Date().toISOString(),
-        status: "pending",
+        content: message,
+        category: commentType,
+        tag: params.case || "general",
       };
 
-      await pb.collection("comments").create(data);
+      await api.suggestions.create(data);
       setSuccess(true);
       resetForm();
       Alert.alert(
-        "Success",
-        `Your ${commentType.toLowerCase()} has been submitted successfully!`
+        "Submitted",
+        `Your ${commentType.toLowerCase()} has been sent to ZRP Command Office.`
       );
     } catch (error) {
-      console.error("Submission error:", error);
-      Alert.alert("Error", "Failed to submit. Please try again.");
+      console.log("Submission error:", error);
+      Alert.alert("Error", "Failed to submit feedback. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -95,49 +73,24 @@ const Case = () => {
     setErrors({});
   };
 
-  const handlePhoneNumberUpdate = async () => {
-    Alert.alert(
-      "Update Phone Number",
-      "To update your phone number, please go to Settings and update your emergency contact information.",
-      [
-        { text: "Cancel", style: "cancel" },
-        { 
-          text: "Go to Settings", 
-          onPress: () => router.push("/about")
-        }
-      ]
-    );
-  };
-
   if (success) {
     return (
       <View style={styles.successContainer}>
         <Stack.Screen options={{ headerShown: false }} />
-        <StatusBar barStyle="dark-content" backgroundColor="#f8fafc" />
-        
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerContent}>
-            <Text style={styles.headerTitle}>
-              {params?.case ? `Report ${params.case}` : "Feedback Submitted"}
-            </Text>
-            <Text style={styles.headerSubtitle}>
-              Zimbabwe Republic Police
-            </Text>
-          </View>
-        </View>
+        <AppHeader
+          title="Feedback Submitted"
+          subtitle="Zimbabwe Republic Police"
+          showBack={true}
+        />
 
         <View style={styles.successCard}>
           <View style={styles.successHeader}>
             <View style={styles.successIconContainer}>
-              <FontAwesome5 name="check-circle" size={48} color="#059669" />
+              <FontAwesome5 name="check-circle" size={48} color="#16A34A" />
             </View>
             <Text style={styles.successTitle}>Thank You!</Text>
             <Text style={styles.successSubtitle}>
-              Your {commentType.toLowerCase()} has been submitted
-            </Text>
-            <Text style={styles.successMessage}>
-              We appreciate your feedback and will review it shortly.
+              Your {commentType.toLowerCase()} has been submitted anonymously.
             </Text>
           </View>
 
@@ -152,10 +105,10 @@ const Case = () => {
 
             <TouchableOpacity
               style={[styles.button, styles.secondaryButton]}
-              onPress={() => router.replace("/(tabs)/services")}
+              onPress={() => router.replace("/(tabs)")}
             >
-              <FontAwesome5 name="home" size={16} color="#1E3A8A" />
-              <Text style={styles.secondaryButtonText}>Go to Services</Text>
+              <FontAwesome5 name="home" size={16} color="#0052CC" />
+              <Text style={styles.secondaryButtonText}>Return to Home</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -166,93 +119,40 @@ const Case = () => {
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-      <StatusBar barStyle="dark-content" backgroundColor="#f8fafc" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>
-            {params?.case ? `Report ${params.case}` : "Submit Feedback"}
-          </Text>
-          <Text style={styles.headerSubtitle}>
-            Zimbabwe Republic Police
-          </Text>
-        </View>
-        <View style={styles.headerRight} />
-      </View>
+      {/* App Bar (ZRP Blue with logo and safe area top inset) */}
+      <AppHeader
+        title={params?.case ? `Report ${params.case}` : "Suggestion Box"}
+        subtitle="Zimbabwe Republic Police Command"
+        showBack={true}
+      />
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Phone Number Info */}
-        {userPhoneNumber && (
-          <View style={styles.phoneInfoSection}>
-            <View style={styles.phoneInfoHeader}>
-              <View style={styles.phoneIconContainer}>
-                <Ionicons name="phone-portrait" size={20} color="#1E3A8A" />
-              </View>
-              <View style={styles.phoneInfoContent}>
-                <Text style={styles.phoneInfoLabel}>Your Contact Number</Text>
-                <Text style={styles.phoneInfoValue}>{userPhoneNumber}</Text>
-              </View>
-            </View>
-            <TouchableOpacity 
-              style={styles.updatePhoneButton}
-              onPress={handlePhoneNumberUpdate}
-            >
-              <Text style={styles.updatePhoneText}>Update Number</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Feedback Form */}
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.formSection}>
-          <Text style={styles.sectionTitle}>Feedback Details</Text>
+          <Text style={styles.sectionTitle}>Anonymous Feedback Details</Text>
           <View style={styles.formCard}>
-            
-            {/* Picker */}
             <View style={styles.formGroup}>
-              <Text style={styles.inputLabel}>Feedback Type</Text>
+              <Text style={styles.inputLabel}>Feedback Category</Text>
               <View style={styles.pickerContainer}>
                 <Picker
                   selectedValue={commentType}
-                  onValueChange={(itemValue) => {
-                    setCommentType(itemValue);
-                    setErrors({});
-                  }}
-                  dropdownIconColor="#6B7280"
+                  onValueChange={(itemValue) => setCommentType(itemValue)}
+                  dropdownIconColor="#64748B"
                   style={styles.picker}
                 >
                   {commentTypes.map((type) => (
-                    <Picker.Item
-                      key={type.value}
-                      label={type.label}
-                      value={type.value}
-                      color="#111827"
-                    />
+                    <Picker.Item key={type.value} label={type.label} value={type.value} color="#0F172A" />
                   ))}
                 </Picker>
               </View>
             </View>
 
-            {/* Message Input */}
             <View style={styles.formGroup}>
               <Text style={styles.inputLabel}>Your Message</Text>
               <TextInput
-                style={[
-                  styles.textInput,
-                  errors.message && styles.inputError,
-                ]}
+                style={[styles.textInput, errors.message && styles.inputError]}
                 placeholder={`Enter your ${commentType.toLowerCase()} here...`}
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor="#94A3B8"
                 multiline
                 numberOfLines={6}
                 textAlignVertical="top"
@@ -262,25 +162,18 @@ const Case = () => {
                   if (errors.message) setErrors({});
                 }}
               />
-              {errors.message && (
-                <Text style={styles.errorText}>{errors.message}</Text>
-              )}
+              {errors.message && <Text style={styles.errorText}>{errors.message}</Text>}
             </View>
 
-            {/* Note */}
             <View style={styles.noteContainer}>
-              <Ionicons name="information-circle" size={16} color="#6B7280" />
+              <Ionicons name="shield-checkmark" size={16} color="#0052CC" />
               <Text style={styles.noteText}>
-                Note: Your feedback is anonymous. We do not store or share any personal details.
+                Your suggestion is transmitted anonymously. SafeTap privacy protocols ensure your personal identity is protected.
               </Text>
             </View>
 
-            {/* Submit Button */}
             <TouchableOpacity
-              style={[
-                styles.submitButton,
-                loading && styles.submitButtonDisabled,
-              ]}
+              style={[styles.submitButton, loading && styles.submitButtonDisabled]}
               onPress={handleSubmit}
               disabled={loading}
             >
@@ -288,299 +181,113 @@ const Case = () => {
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
                 <>
-                  <FontAwesome5
-                    name="paper-plane"
-                    size={16}
-                    color="#FFFFFF"
-                    style={styles.buttonIcon}
-                  />
+                  <FontAwesome5 name="paper-plane" size={15} color="#FFFFFF" style={{ marginRight: 8 }} />
                   <Text style={styles.submitButtonText}>Submit Feedback</Text>
                 </>
               )}
             </TouchableOpacity>
           </View>
         </View>
-
-        {/* Footer Spacing */}
-        <View style={styles.footerSpacing} />
       </ScrollView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f8fafc",
-  },
-  // Header Styles
+  container: { flex: 1, backgroundColor: "#F8FAFC" },
   header: {
-    backgroundColor: "#1E3A8A",
-    paddingTop: 50,
-    paddingBottom: 16,
+    backgroundColor: "#0F172A",
+    paddingTop: 48,
+    paddingBottom: 14,
     paddingHorizontal: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    borderBottomWidth: 2,
+    borderBottomColor: "#D97706",
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
     justifyContent: "center",
     alignItems: "center",
   },
-  headerContent: {
-    flex: 1,
-    marginHorizontal: 12,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#FFFFFF",
-    textAlign: "center",
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: "rgba(255, 255, 255, 0.9)",
-    textAlign: "center",
-    marginTop: 2,
-  },
-  headerRight: {
-    width: 40,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 20,
-  },
-  // Phone Info Section
-  phoneInfoSection: {
-    backgroundColor: "#FFFFFF",
-    marginTop: 8,
-    marginHorizontal: 16,
-    borderRadius: 12,
-    padding: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  phoneInfoHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  phoneIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: "#EFF6FF",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  phoneInfoContent: {
-    flex: 1,
-  },
-  phoneInfoLabel: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginBottom: 2,
-  },
-  phoneInfoValue: {
-    fontSize: 16,
-    color: "#111827",
-    fontWeight: "500",
-  },
-  updatePhoneButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: "#F3F4F6",
-    borderRadius: 6,
-    marginLeft: 12,
-  },
-  updatePhoneText: {
-    fontSize: 12,
-    color: "#1E3A8A",
-    fontWeight: "500",
-  },
-  // Form Section
-  formSection: {
-    marginTop: 16,
-    paddingHorizontal: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#111827",
-    marginBottom: 12,
-  },
+  headerContent: { flex: 1, marginHorizontal: 10 },
+  headerTitle: { fontSize: 17, fontWeight: "700", color: "#FFFFFF", textAlign: "center" },
+  headerSubtitle: { fontSize: 11, color: "#D97706", textAlign: "center", marginTop: 1 },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingBottom: 30 },
+  formSection: { marginTop: 16, paddingHorizontal: 16 },
+  sectionTitle: { fontSize: 16, fontWeight: "700", color: "#1E3A8A", marginBottom: 10 },
   formCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     padding: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
-  formGroup: {
-    marginBottom: 16,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#374151",
-    marginBottom: 8,
-  },
+  formGroup: { marginBottom: 16 },
+  inputLabel: { fontSize: 13, fontWeight: "600", color: "#334155", marginBottom: 6 },
   pickerContainer: {
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#F8FAFC",
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#CBD5E1",
     overflow: "hidden",
   },
-  picker: {
-    height: 50,
-    color: "#111827",
-  },
+  picker: { height: 48, color: "#0F172A" },
   textInput: {
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#F8FAFC",
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#CBD5E1",
     padding: 12,
-    fontSize: 16,
-    color: "#111827",
+    fontSize: 15,
+    color: "#0F172A",
     minHeight: 120,
-    textAlignVertical: "top",
   },
-  inputError: {
-    borderColor: "#EF4444",
-  },
-  errorText: {
-    color: "#EF4444",
-    fontSize: 12,
-    marginTop: 4,
-    marginLeft: 4,
-  },
+  inputError: { borderColor: "#DC2626" },
+  errorText: { color: "#DC2626", fontSize: 12, marginTop: 4 },
   noteContainer: {
     flexDirection: "row",
     alignItems: "flex-start",
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#E6EFFC",
     borderRadius: 8,
     padding: 12,
     marginBottom: 20,
-    marginTop: 4,
   },
-  noteText: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginLeft: 8,
-    flex: 1,
-    lineHeight: 16,
-  },
+  noteText: { fontSize: 12, color: "#0052CC", marginLeft: 8, flex: 1, lineHeight: 16 },
   submitButton: {
-    backgroundColor: "#1E3A8A",
+    backgroundColor: "#0052CC",
     paddingVertical: 14,
-    paddingHorizontal: 20,
     borderRadius: 8,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
   },
-  submitButtonDisabled: {
-    opacity: 0.7,
-  },
-  buttonIcon: {
-    marginRight: 8,
-  },
-  submitButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  // Success Screen Styles
-  successContainer: {
-    flex: 1,
-    backgroundColor: "#f8fafc",
-  },
-  successCard: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 24,
-  },
-  successHeader: {
-    alignItems: "center",
-    marginBottom: 32,
-  },
-  successIconContainer: {
-    marginBottom: 20,
-  },
-  successTitle: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: "#059669",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  successSubtitle: {
-    fontSize: 16,
-    color: "#6B7280",
-    textAlign: "center",
-    marginBottom: 12,
-  },
-  successMessage: {
-    fontSize: 14,
-    color: "#9CA3AF",
-    textAlign: "center",
-    lineHeight: 20,
-  },
-  successButtons: {
-    width: "100%",
-    maxWidth: 400,
-  },
+  submitButtonDisabled: { opacity: 0.7 },
+  submitButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "700" },
+  successContainer: { flex: 1, backgroundColor: "#F8FAFC" },
+  successCard: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 24 },
+  successHeader: { alignItems: "center", marginBottom: 28 },
+  successIconContainer: { marginBottom: 16 },
+  successTitle: { fontSize: 26, fontWeight: "800", color: "#16A34A", marginBottom: 6 },
+  successSubtitle: { fontSize: 14, color: "#475569", textAlign: "center" },
+  successButtons: { width: "100%", maxWidth: 360 },
   button: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 14,
-    paddingHorizontal: 20,
     borderRadius: 8,
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  primaryButton: {
-    backgroundColor: "#1E3A8A",
-  },
-  secondaryButton: {
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  buttonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
-    marginLeft: 8,
-  },
-  secondaryButtonText: {
-    color: "#1E3A8A",
-    fontSize: 16,
-    fontWeight: "600",
-    marginLeft: 8,
-  },
-  footerSpacing: {
-    height: 20,
-  },
+  primaryButton: { backgroundColor: "#0052CC" },
+  secondaryButton: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#CBD5E1" },
+  buttonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "700", marginLeft: 8 },
+  secondaryButtonText: { color: "#0052CC", fontSize: 15, fontWeight: "700", marginLeft: 8 },
 });
 
 export default Case;

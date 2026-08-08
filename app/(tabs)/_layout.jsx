@@ -2,52 +2,39 @@ import React from "react";
 import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { Platform, View, StyleSheet } from "react-native";
-import { BlurView } from "expo-blur";
-import "../global.css";
+import { View, StyleSheet } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import { componentHeights } from "../../src/constants/theme";
+import { useAppTheme } from "../../src/context/ThemeContext";
 
 export default function RootLayout() {
+  const { colors: themeColors, mode } = useAppTheme();
   const insets = useSafeAreaInsets();
+  const bottomPadding = Math.max(insets.bottom, 8);
+  const totalNavHeight = componentHeights.bottomNav + bottomPadding;
 
   return (
     <View style={styles.container}>
-      <StatusBar style="light"/>
+      <StatusBar style={mode === "dark" ? "light" : "dark"} />
       <Tabs
         screenOptions={{
           headerShown: false,
           tabBarStyle: {
-            backgroundColor: "transparent",
+            backgroundColor: themeColors.surface,
             borderTopWidth: 1,
-            borderTopColor: "#D1D5DB", // Light gray border (hex value)
-
-            height: Platform.select({
-              ios: 70 + (insets.bottom > 0 ? insets.bottom - 20 : 0),
-              android: 70,
-            }),
-            paddingTop: 0,
-            paddingBottom: Platform.select({
-              ios: insets.bottom > 0 ? insets.bottom : 16,
-              android: 12,
-            }),
+            borderTopColor: themeColors.border,
+            height: totalNavHeight,
+            paddingTop: 8,
+            paddingBottom: bottomPadding,
             paddingHorizontal: 0,
-            marginHorizontal: 0,
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
             elevation: 0,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: -2 },
-            shadowOpacity: 0.05,
-            shadowRadius: 4,
-            overflow: "hidden",
+            shadowColor: "transparent",
           },
-          tabBarActiveTintColor: "#1E40AF", // Dark blue for active
-          tabBarInactiveTintColor: "#A9A9A9", // Darker gray for inactive
+          tabBarActiveTintColor: themeColors.primary,
+          tabBarInactiveTintColor: themeColors.textMuted,
           tabBarLabelStyle: {
-            fontSize: 9,
-            fontWeight: "500",
+            fontSize: 11,
+            fontWeight: "600",
             marginTop: 2,
             marginBottom: 0,
           },
@@ -58,30 +45,21 @@ export default function RootLayout() {
             flex: 1,
             justifyContent: "center",
             alignItems: "center",
-            paddingVertical: 4,
           },
           tabBarHideOnKeyboard: true,
-          tabBarBackground: () => (
-            <BlurView
-              intensity={100}
-              tint="light"
-              style={StyleSheet.absoluteFill}
-            />
-          ),
         }}
       >
         <Tabs.Screen
           name="index"
           options={{
             title: "Home",
-            tabBarIcon: ({ focused, color, size }) => (
+            tabBarIcon: ({ focused, color }) => (
               <Ionicons
                 name={focused ? "home" : "home-outline"}
-                size={size || 19}
+                size={22}
                 color={color}
               />
             ),
-            
           }}
         />
 
@@ -89,23 +67,24 @@ export default function RootLayout() {
           name="contacts"
           options={{
             title: "Stations",
-            tabBarIcon: ({ focused, color, size }) => (
+            tabBarIcon: ({ focused, color }) => (
               <Ionicons
                 name={focused ? "call" : "call-outline"}
-                size={size || 19}
+                size={22}
                 color={color}
               />
             ),
           }}
         />
-          <Tabs.Screen
+
+        <Tabs.Screen
           name="news"
           options={{
-            title: "News",
-            tabBarIcon: ({ focused, color, size }) => (
+            title: "News Hub",
+            tabBarIcon: ({ focused, color }) => (
               <Ionicons
                 name={focused ? "newspaper" : "newspaper-outline"}
-                size={size || 19}
+                size={22}
                 color={color}
               />
             ),
@@ -116,10 +95,10 @@ export default function RootLayout() {
           name="services"
           options={{
             title: "Services",
-            tabBarIcon: ({ focused, color, size }) => (
+            tabBarIcon: ({ focused, color }) => (
               <Ionicons
-                name={focused ? "list-circle" : "list-outline"}
-                size={size || 19}
+                name={focused ? "apps" : "apps-outline"}
+                size={22}
                 color={color}
               />
             ),
@@ -130,10 +109,10 @@ export default function RootLayout() {
           name="about"
           options={{
             title: "About",
-            tabBarIcon: ({ focused, color, size }) => (
+            tabBarIcon: ({ focused, color }) => (
               <Ionicons
-                name={focused ? "information-circle" : "information-circle"}
-                size={size || 19}
+                name={focused ? "information-circle" : "information-circle-outline"}
+                size={22}
                 color={color}
               />
             ),

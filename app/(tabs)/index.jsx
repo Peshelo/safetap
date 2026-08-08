@@ -10,68 +10,76 @@ import {
   Image,
   RefreshControl,
   Dimensions,
+  Platform,
   ImageBackground,
 } from "react-native";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { router } from "expo-router";
-import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
-import pb from "../../lib/connection";
-import * as Location from "expo-location";
-import * as SecureStore from "expo-secure-store";
-import { StatusBar } from "react-native";
+import { Ionicons, FontAwesome5, MaterialCommunityIcons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import api, { resolveMediaUrl } from "../../src/services/api";
+import analyticsService from "../../src/services/analyticsService";
+import { triggerStationCall } from "../../lib/callTrigger";
+import AppHeader from "../../src/components/AppHeader";
+import { colors, radius, spacing, typography, componentHeights, borders, elevation } from "../../src/constants/theme";
+import { useAppTheme } from "../../src/context/ThemeContext";
 
-const { width } = Dimensions.get("window");
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-const COLORS = {
-  navy: "#1E3A8A",
-  navyLight: "#2D4FAA",
-  yellow: "#FBBF24",
-  yellowLight: "#FDE68A",
-  red: "#DC2626",
-  green: "#059669",
-  bg: "#F1F5F9",
-  white: "#FFFFFF",
-  textDark: "#0F172A",
-  textMid: "#475569",
-  textLight: "#94A3B8",
-  border: "#E2E8F0",
+const triggerHaptic = () => {
+  if (Platform.OS !== "web") {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  }
 };
 
+import { getRecentStations } from "../../src/services/recentStationsService";
+
 const Home = () => {
+  const { colors, isDark } = useAppTheme();
+  const PATTERN_BG = require("../../assets/images/fallback.png");
+
   const [loading, setLoading] = useState(false);
   const [newsArticles, setNewsArticles] = useState([]);
+  const [recentStations, setRecentStations] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [noticeDismissed, setNoticeDismissed] = useState(false);
   const [showComingSoon, setShowComingSoon] = useState(false);
   const [comingSoonTitle, setComingSoonTitle] = useState("");
 
-  // Notice banner text — edit as needed
-  const noticeBanner = "NOTICE: Please report any suspicious activity to your nearest police station immediately. Stay safe.";
+  const noticeBanner =
+    "PUBLIC NOTICE: Verify online financial transactions to prevent fraud. Report suspicious activity to nearest ZRP Command.";
 
   const fetchNewsArticles = async () => {
     try {
       setLoading(true);
-      const records = await pb.collection("news").getFullList({ sort: "-created" });
-      setNewsArticles(records);
+      const res = await api.publications.list({ is_published: true, page: 1, page_size: 10 });
+      setNewsArticles(res.items || []);
     } catch (err) {
-      console.error(err);
+      console.log("Error fetching news:", err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
+  const loadRecentStations = async () => {
+    const list = await getRecentStations();
+    setRecentStations(list);
+  };
+
   useEffect(() => {
+    analyticsService.trackFeature("Home Dashboard");
     fetchNewsArticles();
+    loadRecentStations();
   }, []);
 
-  const makeEmergencyCall = (number) => {
-    Linking.openURL(`tel:${number}`).catch(() =>
-      Alert.alert("Error", "Could not make the call")
-    );
+  const makeEmergencyCall = (number, title) => {
+    triggerHaptic();
+    triggerStationCall({ name: title, phone: number });
   };
 
   const openWhatsApp = (number) => {
-    // Strip leading + for WhatsApp URL format
+    triggerHaptic();
     const cleaned = number.replace(/\D/g, "");
     Linking.openURL(`https://wa.me/${cleaned}`).catch(() =>
       Alert.alert("Error", "Could not open WhatsApp")
@@ -81,75 +89,120 @@ const Home = () => {
   const handleRefresh = () => {
     setRefreshing(true);
     fetchNewsArticles();
-  };
-
-  const showComingSoonAlert = (title) => {
-    setComingSoonTitle(title);
-    setShowComingSoon(true);
+    loadRecentStations();
   };
 
   const quickActions = [
     {
       title: "Press Release",
-      subtitle: "Latest news & press releases",
+      subtitle: "Official ZRP releases",
       icon: "newspaper",
-      action: () => router.push("/press-release"),
+      iconLib: "ionicons",
+      accentColor: "#1E3A8A",
+      action: () => {
+        triggerHaptic();
+        router.push("(tabs)/news");
+      },
     },
     {
       title: "Suggestion Box",
       subtitle: "Leave feedback anonymously",
       icon: "archive",
-      action: () => router.push("/report/complaint"),
+      iconLib: "ionicons",
+      accentColor: "#059669",
+      action: () => {
+        triggerHaptic();
+        router.push("/report/complaint");
+      },
     },
   ];
 
   const policeServices = [
     {
       title: "Explore Services",
-      description: "Browse all police services",
-      icon: "search",
+      description: "Browse all public police services",
+      icon: "apps-outline",
       available: true,
-      action: () => router.push("/services"),
+      action: () => {
+        triggerHaptic();
+        router.push("(tabs)/services");
+      },
     },
     {
       title: "Report Follow-up",
       description: "Track your report status",
-      icon: "clipboard-check",
+      icon: "clipboard-outline",
       available: false,
-      action: () => showComingSoonAlert("Police Report Follow-up"),
+      action: () => { setComingSoonTitle("Police Report Follow-up"); setShowComingSoon(true); },
     },
     {
       title: "ZRP on Social Media",
-      description: "Follow ZRP online",
-      icon: "share-alt",
+      description: "Follow official ZRP updates",
+      icon: "share-social-outline",
       available: true,
-      action: () => router.push("/(tabs)/about"),
+      action: () => {
+        triggerHaptic();
+        router.push("(tabs)/about");
+      },
     },
     {
-      title: "About App",
-      description: "Learn about SafeTap",
-      icon: "info-circle",
+      title: "About SafeTap",
+      description: "Learn about this platform",
+      icon: "information-circle-outline",
       available: true,
-      action: () => router.push("/about"),
+      action: () => {
+        triggerHaptic();
+        router.push("(tabs)/about");
+      },
     },
   ];
 
   const emergencyContacts = [
     {
       title: "Police Emergency",
-      subtitle: "24/7 Hotline",
+      subtitle: "24/7 National Command Hotline",
       number: "+263242703631",
-      icon: "shield-alt",
-      bgColor: COLORS.red,
-    },
-    {
-      title: "Child Protection",
-      subtitle: "Toll Free Helpline",
-      number: "+263242703631",
-      icon: "child",
-      bgColor: "#6B21A8",
+      icon: "shield-checkmark",
+      bgGradient: ["#DC2626", "#B91C1C"],
     },
   ];
+
+  const HomeNewsCard = ({ item, router, triggerHaptic }) => {
+    const [imgErr, setImgErr] = useState(false);
+    const rawUrl = resolveMediaUrl(item?.cover_image_url || item?.file);
+    const imgSrc = imgErr || !rawUrl ? require("../../assets/images/fallback.png") : { uri: rawUrl };
+
+    return (
+      <TouchableOpacity
+        onPress={() => {
+          triggerHaptic();
+          router.push("(tabs)/news");
+        }}
+        style={[styles.newsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        activeOpacity={0.85}
+      >
+        <Image
+          source={imgSrc}
+          style={styles.newsImage}
+          onError={() => setImgErr(true)}
+        />
+        <View style={styles.newsContent}>
+          <View style={styles.newsDateRow}>
+            <Ionicons name="calendar-outline" size={11} color={colors.neutral[500]} />
+            <Text style={styles.newsDate}>
+              {item.published_at
+                ? new Date(item.published_at).toLocaleDateString("en-GB")
+                : "Latest"}
+            </Text>
+          </View>
+          <Text style={styles.newsTitle} numberOfLines={2}>{item.title}</Text>
+          {item.summary ? (
+            <Text style={styles.newsDesc} numberOfLines={2}>{item.summary}</Text>
+          ) : null}
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   const NewsSkeleton = () => (
     <ScrollView
@@ -160,9 +213,10 @@ const Home = () => {
       {[1, 2, 3].map((item) => (
         <View key={item} style={styles.newsSkeletonCard}>
           <View style={styles.skeletonImage} />
-          <View style={{ padding: 12 }}>
-            <View style={styles.skeletonTitle} />
-            <View style={styles.skeletonDescription} />
+          <View style={{ padding: 14 }}>
+            <View style={[styles.skeletonLine, { width: "40%", height: 10, marginBottom: 8 }]} />
+            <View style={[styles.skeletonLine, { width: "90%", marginBottom: 6 }]} />
+            <View style={[styles.skeletonLine, { width: "70%" }]} />
           </View>
         </View>
       ))}
@@ -170,31 +224,20 @@ const Home = () => {
   );
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.navy} />
-
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.logoContainer}>
-            <Image
-              source={require("../../assets/images/logo-alternate.png")}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-          </View>
-          <View>
-            <Text style={styles.appName}>SafeTap</Text>
-            <Text style={styles.appSubtitle}>Zimbabwe Republic Police</Text>
-          </View>
-        </View>
-        <TouchableOpacity
-          onPress={() => router.push("(tabs)/about")}
-          style={styles.profileButton}
-        >
-          <Ionicons name="settings" size={18} color={COLORS.navy} />
-        </TouchableOpacity>
-      </View>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <AppHeader
+        title="ZRP SafeTap"
+        subtitle="Zimbabwe Republic Police"
+        rightActions={[
+          {
+            iconName: "information-circle-outline",
+            onPress: () => {
+              triggerHaptic();
+              router.push("(tabs)/about");
+            },
+          },
+        ]}
+      />
 
       <ScrollView
         style={styles.scrollView}
@@ -203,154 +246,232 @@ const Home = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            colors={[COLORS.yellow]}
-            tintColor={COLORS.yellow}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
           />
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Notice Banner */}
-        <View style={styles.noticeBanner}>
-          <FontAwesome5 name="bullhorn" size={13} color={COLORS.navy} style={{ marginRight: 8, marginTop: 1 }} />
-          <Text style={styles.noticeText} numberOfLines={2}>{noticeBanner}</Text>
-        </View>
+        {/* Sleek Executive Redesigned Notice Badge with Pattern Overlay */}
+        {!noticeDismissed && (
+          <ImageBackground
+            source={PATTERN_BG}
+            style={[styles.sleekNoticeCard, { backgroundColor: isDark ? colors.surface : "#FEFCE8", borderColor: isDark ? colors.border : "#FEF08A" }]}
+            imageStyle={{ opacity: 0.08, resizeMode: "cover" }}
+          >
+            <View style={styles.noticeBadgeLeft}>
+              <View style={styles.alertPulseDot} />
+              <Ionicons name="warning-outline" size={18} color="#D97706" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.sleekNoticeHeading, { color: isDark ? "#FBBF24" : "#B45309" }]}>ZRP ALERT</Text>
+              <Text style={[styles.sleekNoticeBody, { color: colors.textPrimary }]} numberOfLines={2}>
+                {noticeBanner}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => setNoticeDismissed(true)} style={styles.noticeDismissBtn}>
+              <Ionicons name="close" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          </ImageBackground>
+        )}
 
-        {/* Station Cards */}
-        <View style={styles.stationRow}>
-          {/* Directory */}
+        {/* Hero Cards Row — Police Directory (Rich Blue + Brown Border) & Spatial Radar (Rich Brown + Blue Border) */}
+        <View style={styles.heroRow}>
           <TouchableOpacity
-            onPress={() => router.push("(tabs)/contacts")}
-            style={styles.stationCardWrapper}
+            onPress={() => { triggerHaptic(); router.push("(tabs)/contacts"); }}
+            style={[styles.heroCard, styles.heroCardBlueWithBrown]}
             activeOpacity={0.88}
           >
             <ImageBackground
-              source={require("../../assets/images/fallback.png")}
-              style={styles.stationCardBg}
-              imageStyle={styles.stationCardImageStyle}
+              source={PATTERN_BG}
+              style={styles.heroCardInner}
+              imageStyle={{ opacity: 0.12, resizeMode: "cover" }}
             >
-              <View style={styles.stationOverlayNavy}>
-                <View style={styles.stationIconCircle}>
-                  <FontAwesome5 name="building" size={20} color={COLORS.white} />
-                </View>
-                <Text style={styles.stationCardTitle}>Police Station Directory</Text>
-                <Text style={styles.stationCardSub}>Browse all stations with contact information</Text>
+              <View style={styles.heroIconCircle}>
+                <Ionicons name="call" size={22} color="#FFFFFF" />
+              </View>
+              <Text style={styles.heroCardTitle}>Police Stations</Text>
+              <Text style={styles.heroCardSub}>Browse stations & contacts</Text>
+              <View style={styles.heroArrow}>
+                <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
               </View>
             </ImageBackground>
           </TouchableOpacity>
 
-          {/* Locate Nearby */}
           <TouchableOpacity
-            onPress={() => router.push("/maps")}
-            style={styles.stationCardWrapper}
+            onPress={() => { triggerHaptic(); router.push("/maps"); }}
+            style={[styles.heroCard, styles.heroCardBrownWithBlue]}
             activeOpacity={0.88}
           >
             <ImageBackground
-              source={require("../../assets/images/fallback.png")}
-              style={styles.stationCardBg}
-              imageStyle={styles.stationCardImageStyle}
+              source={PATTERN_BG}
+              style={styles.heroCardInner}
+              imageStyle={{ opacity: 0.12, resizeMode: "cover" }}
             >
-              <View style={styles.stationOverlayYellow}>
-                <View style={[styles.stationIconCircle, { backgroundColor: "rgba(0,0,0,0.18)" }]}>
-                  <FontAwesome5 name="map-marked-alt" size={20} color={COLORS.navy} />
-                </View>
-                <Text style={[styles.stationCardTitle, { color: COLORS.navy }]}>Live Station Locator</Text>
-                <Text style={[styles.stationCardSub, { color: "rgba(15,23,42,0.75)" }]}>Find nearest stations with directions & distance</Text>
+              <View style={[styles.heroIconCircle, { backgroundColor: "rgba(255,255,255,0.25)" }]}>
+                <Ionicons name="map" size={22} color="#FFFFFF" />
+              </View>
+              <Text style={[styles.heroCardTitle, { color: "#FFFFFF" }]}>Locate Stations</Text>
+              <Text style={[styles.heroCardSub, { color: "rgba(255,255,255,0.9)" }]}>Find nearest police stations</Text>
+              <View style={[styles.heroArrow, { backgroundColor: "rgba(255,255,255,0.25)" }]}>
+                <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
               </View>
             </ImageBackground>
           </TouchableOpacity>
         </View>
 
-        {/* Emergency Contacts */}
+        {/* Recently Accessed Stations Section */}
+        {recentStations.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleRow}>
+                <Ionicons name="time" size={16} color={colors.primary} />
+                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Recently Accessed Stations</Text>
+              </View>
+              <TouchableOpacity onPress={() => router.push("(tabs)/contacts")}>
+                <Text style={[styles.viewAllText, { color: colors.primary }]}>View All</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingTop: 4 }}>
+              {recentStations.map((stn) => (
+                <TouchableOpacity
+                  key={stn.id}
+                  style={[styles.recentCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/contactDetails",
+                      params: {
+                        id: stn.id,
+                        station: stn.name,
+                        province: stn.province,
+                        district: stn.district,
+                        station_number: stn.phone,
+                        whatsapp_number: stn.whatsapp,
+                        latitude: stn.latitude,
+                        longitude: stn.longitude,
+                        address: stn.address || "",
+                      },
+                    })
+                  }
+                  activeOpacity={0.85}
+                >
+                  <View style={[styles.recentBadgeIcon, { backgroundColor: colors.primarySoft }]}>
+                    <Ionicons name="call" size={16} color={colors.primary} />
+                  </View>
+                  <Text style={[styles.recentName, { color: colors.textPrimary }]} numberOfLines={1}>{stn.name}</Text>
+                  <Text style={[styles.recentSub, { color: colors.textMuted }]} numberOfLines={1}>{stn.province || "Zimbabwe"}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Emergency Contacts Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
-              <FontAwesome5 name="phone-alt" size={13} color={COLORS.red} />
-              <Text style={styles.sectionTitle}>Emergency Contacts</Text>
+              <View style={[styles.sectionDot, { backgroundColor: colors.danger }]} />
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Emergency Hotlines</Text>
             </View>
-            <TouchableOpacity onPress={() => router.push("/contacts")}>
-              <Text style={styles.viewAll}>All Contacts</Text>
+            <TouchableOpacity
+              onPress={() => { triggerHaptic(); router.push("(tabs)/contacts"); }}
+              style={styles.viewAllBtn}
+            >
+              <Text style={[styles.viewAllText, { color: colors.primary }]}>All Contacts</Text>
+              <Ionicons name="chevron-forward" size={13} color={colors.primary} />
             </TouchableOpacity>
           </View>
 
-          {/* Emergency call cards */}
           <View style={styles.emergencyGrid}>
             {emergencyContacts.map((contact, index) => (
               <TouchableOpacity
                 key={index}
-                onPress={() => makeEmergencyCall(contact.number)}
-                style={[styles.emergencyCard, { backgroundColor: contact.bgColor }]}
+                onPress={() => makeEmergencyCall(contact.number, contact.title)}
+                style={[styles.emergencyCard, { backgroundColor: contact.bgGradient[0] }]}
                 activeOpacity={0.88}
               >
-                <View style={styles.emergencyIconWrap}>
-                  <FontAwesome5 name={contact.icon} size={16} color={COLORS.white} />
-                </View>
-                <Text style={styles.emergencyTitle}>{contact.title}</Text>
-                <Text style={styles.emergencySubtitle}>{contact.subtitle}</Text>
-                <View style={[styles.callBadge, { backgroundColor: "rgba(255,255,255,0.25)" }]}>
-                  <FontAwesome5 name="phone-alt" size={10} color={COLORS.white} />
-                </View>
+                <ImageBackground
+                  source={PATTERN_BG}
+                  style={styles.emergencyCardInner}
+                  imageStyle={{ opacity: 0.12, resizeMode: "cover" }}
+                >
+                  <View style={styles.emergencyIconWrap}>
+                    <Ionicons name={contact.icon} size={20} color="#fff" />
+                  </View>
+                  <Text style={styles.emergencyTitle}>{contact.title}</Text>
+                  <Text style={styles.emergencySubtitle}>{contact.subtitle}</Text>
+                  <View style={styles.callBadge}>
+                    <Ionicons name="call" size={11} color="#fff" />
+                  </View>
+                </ImageBackground>
               </TouchableOpacity>
             ))}
           </View>
 
-          {/* WhatsApp — separate, distinct card */}
-          <View style={styles.whatsappSection}>
-            <View style={styles.whatsappLabelRow}>
-              <View style={styles.whatsappDivider} />
-              <Text style={styles.whatsappLabel}>Chat & Messaging</Text>
-              <View style={styles.whatsappDivider} />
-            </View>
-            <TouchableOpacity
-              onPress={() => openWhatsApp("+263712800197")}
-              style={styles.whatsappCard}
-              activeOpacity={0.88}
+          {/* WhatsApp Card */}
+          <TouchableOpacity
+            onPress={() => openWhatsApp("+263712800197")}
+            style={styles.whatsappCard}
+            activeOpacity={0.88}
+          >
+            <ImageBackground
+              source={PATTERN_BG}
+              style={styles.whatsappCardInner}
+              imageStyle={{ opacity: 0.1, resizeMode: "cover" }}
             >
               <View style={styles.whatsappIconWrap}>
-                <FontAwesome5 name="whatsapp" size={22} color={COLORS.white} />
+                <FontAwesome5 name="whatsapp" size={22} color="#fff" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.whatsappTitle}>Chat on WhatsApp</Text>
-                <Text style={styles.whatsappSub}>Talk to us on WhatsApp</Text>
+                <Text style={styles.whatsappTitle}>Official WhatsApp Helpline</Text>
+                <Text style={styles.whatsappSub}>Chat directly with ZRP Command</Text>
               </View>
               <View style={styles.whatsappChevron}>
                 <Ionicons name="arrow-forward" size={14} color="#25D366" />
               </View>
-            </TouchableOpacity>
-          </View>
+            </ImageBackground>
+          </TouchableOpacity>
         </View>
 
         {/* Quick Actions */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleRow}>
+              <View style={[styles.sectionDot, { backgroundColor: colors.primary }]} />
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Quick Actions</Text>
+            </View>
+          </View>
           <View style={styles.quickActionsGrid}>
             {quickActions.map((item, index) => (
               <TouchableOpacity
                 key={index}
                 onPress={item.action}
-                style={styles.quickActionCard}
+                style={[styles.quickActionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 7 }]}
                 activeOpacity={0.88}
               >
-                <View style={styles.quickActionIcon}>
-                  <FontAwesome5 name={item.icon} size={17} color={COLORS.navy} />
+                <View style={[styles.quickActionIcon, { backgroundColor: `${item.accentColor}12`, borderRadius: 7 }]}>
+                  <Ionicons name={item.icon} size={20} color={item.accentColor} />
                 </View>
-                <Text style={styles.quickActionTitle}>{item.title}</Text>
-                <Text style={styles.quickActionSub}>{item.subtitle}</Text>
+                <Text style={[styles.quickActionTitle, { color: colors.textPrimary }]}>{item.title}</Text>
+                <Text style={[styles.quickActionSub, { color: colors.textMuted }]}>{item.subtitle}</Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
-     
-
-        {/* News */}
-        <View style={styles.newsSection}>
-          <View style={[styles.sectionHeader, { paddingHorizontal: 16 }]}>
+        {/* News Feed */}
+        <View style={[styles.newsSection, { backgroundColor: colors.background, borderColor: colors.border }]}>
+          <View style={[styles.sectionHeader, { paddingHorizontal: spacing.screenPadding }]}>
             <View style={styles.sectionTitleRow}>
-              <FontAwesome5 name="newspaper" size={13} color={COLORS.yellow} />
-              <Text style={styles.sectionTitle}>News & Press Releases</Text>
+              <View style={[styles.sectionDot, { backgroundColor: colors.warning }]} />
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>News & Press Releases</Text>
             </View>
-            <TouchableOpacity onPress={() => router.push("/press-release")}>
-              <Text style={styles.viewAll}>View All</Text>
+            <TouchableOpacity
+              onPress={() => { triggerHaptic(); router.push("(tabs)/news"); }}
+              style={styles.viewAllBtn}
+            >
+              <Text style={[styles.viewAllText, { color: colors.primary }]}>View All</Text>
+              <Ionicons name="chevron-forward" size={13} color={colors.primary} />
             </TouchableOpacity>
           </View>
 
@@ -363,51 +484,30 @@ const Home = () => {
               contentContainerStyle={styles.newsScrollContent}
             >
               {newsArticles.map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  onPress={() => router.push(`/press-release/${item.id}`)}
-                  style={styles.newsCard}
-                  activeOpacity={0.88}
-                >
-                  <Image
-                    source={
-                      item.file
-                        ? { uri: pb.files.getURL(item, item.file) }
-                        : require("../../assets/images/fallback.png")
-                    }
-                    style={styles.newsImage}
-                    defaultSource={require("../../assets/images/fallback.png")}
-                  />
-                  <View style={styles.newsContent}>
-                    <Text style={styles.newsDate}>
-                      {new Date(item.created).toLocaleDateString("en-GB")}
-                    </Text>
-                    <Text style={styles.newsTitle} numberOfLines={2}>{item.title}</Text>
-                    {item.description && (
-                      <Text style={styles.newsDesc} numberOfLines={2}>
-                        {item.description.replace(/<[^>]*>/g, "")}
-                      </Text>
-                    )}
-                  </View>
-                </TouchableOpacity>
+                <HomeNewsCard key={item.id} item={item} router={router} triggerHaptic={triggerHaptic} />
               ))}
             </ScrollView>
           ) : (
             <View style={styles.emptyNews}>
-              <Text style={styles.emptyNewsText}>No news articles available</Text>
+              <Ionicons name="newspaper-outline" size={40} color={colors.textMuted} />
+              <Text style={[styles.emptyNewsText, { color: colors.textMuted }]}>No publications currently available</Text>
             </View>
           )}
         </View>
 
-   {/* Police Services */}
+        {/* Police Services List */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
-              <FontAwesome5 name="tasks" size={13} color={COLORS.navy} />
+              <View style={[styles.sectionDot, { backgroundColor: "#059669" }]} />
               <Text style={styles.sectionTitle}>Police Services</Text>
             </View>
-            <TouchableOpacity onPress={() => router.push("/services")}>
-              <Text style={styles.viewAll}>View All</Text>
+            <TouchableOpacity
+              onPress={() => { triggerHaptic(); router.push("/services"); }}
+              style={styles.viewAllBtn}
+            >
+              <Text style={styles.viewAllText}>View All</Text>
+              <Ionicons name="chevron-forward" size={13} color={colors.primary} />
             </TouchableOpacity>
           </View>
 
@@ -425,14 +525,18 @@ const Home = () => {
                 disabled={!service.available}
               >
                 <View style={styles.serviceIconWrap}>
-                  <FontAwesome5 name={service.icon} size={14} color={service.available ? COLORS.navy : COLORS.textLight} />
+                  <Ionicons
+                    name={service.icon}
+                    size={18}
+                    color={service.available ? colors.primary : colors.neutral[400]}
+                  />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.serviceTitle}>{service.title}</Text>
                   <Text style={styles.serviceDesc}>{service.description}</Text>
                 </View>
                 {service.available ? (
-                  <Ionicons name="chevron-forward" size={15} color={COLORS.textLight} />
+                  <Ionicons name="chevron-forward" size={16} color={colors.neutral[400]} />
                 ) : (
                   <View style={styles.soonBadge}>
                     <Text style={styles.soonText}>Soon</Text>
@@ -445,10 +549,9 @@ const Home = () => {
 
         {/* Footer */}
         <View style={styles.footer}>
-          <FontAwesome5 name="shield-alt" size={16} color={COLORS.navy} />
-          <Text style={styles.footerText}>
-            Your safety is our priority. Always know your nearest police station.
-          </Text>
+          <Ionicons name="shield-checkmark" size={18} color={colors.primary} />
+          <Text style={styles.footerText}>Your safety is our priority</Text>
+          <Text style={styles.footerSub}>© 2026 Zimbabwe Republic Police</Text>
         </View>
       </ScrollView>
 
@@ -456,7 +559,9 @@ const Home = () => {
       {showComingSoon && (
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
-            <Ionicons name="time-outline" size={44} color={COLORS.yellow} style={{ marginBottom: 12 }} />
+            <View style={styles.modalIconWrap}>
+              <Ionicons name="time" size={36} color={colors.warning} />
+            </View>
             <Text style={styles.modalTitle}>Coming Soon</Text>
             <Text style={styles.modalMessage}>
               {comingSoonTitle} is currently in development and will be available soon.
@@ -475,222 +580,315 @@ const Home = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
+  container: { flex: 1, backgroundColor: colors.neutral[50] },
   scrollView: { flex: 1 },
-  scrollContent: { paddingBottom: 40 },
+  scrollContent: { paddingBottom: 48 },
 
-  // Header
-  header: {
-    backgroundColor: COLORS.navy,
-    paddingTop: 52,
-    paddingBottom: 12,
-    paddingHorizontal: 16,
+  // Hero Cards Row Styles (Blue with Gold Border & Gold with Blue Border)
+  heroRow: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    paddingHorizontal: spacing.screenPadding,
+    marginTop: spacing.screenPadding,
+    marginBottom: spacing.section,
+    gap: spacing.component,
   },
-  headerLeft: { flexDirection: "row", alignItems: "center", flex: 1 },
-  logoContainer: { width: 44, height: 44, marginRight: 10 },
-  logo: { width: 44, height: 44 },
-  appName: { fontSize: 17, fontWeight: "700", color: COLORS.white },
-  appSubtitle: { fontSize: 11, color: "rgba(255,255,255,0.65)", marginTop: 1 },
-  profileButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: COLORS.yellowLight,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1.5,
-    borderColor: COLORS.yellow,
-  },
-
-  // Notice Banner
-  noticeBanner: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: COLORS.yellowLight,
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.yellow,
-    marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 4,
-    borderRadius: 8,
-    padding: 12,
-  },
-  noticeText: {
+  heroCard: {
     flex: 1,
-    fontSize: 12.5,
-    color: COLORS.textDark,
-    lineHeight: 18,
-    fontWeight: "500",
-  },
-
-  // Station Cards
-  stationRow: {
-    flexDirection: "row",
-    paddingHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 20,
-    gap: 12,
-  },
-  stationCardWrapper: {
-    flex: 1,
-    height: 180,
-    borderRadius: 14,
+    height: 148,
+    borderRadius: 12,
     overflow: "hidden",
   },
-  stationCardBg: {
-    width: "100%",
-    height: "100%",
+  heroCardBlueWithBrown: {
+    backgroundColor: "#1E3A8A",
+    borderBottomWidth: 4,
+    borderBottomColor: "#C49A45",
   },
-  stationCardImageStyle: {
-    borderRadius: 14,
+  heroCardBrownWithBlue: {
+    backgroundColor: "#C49A45",
+    borderBottomWidth: 4,
+    borderBottomColor: "#1E3A8A",
   },
-  stationOverlayNavy: {
+  heroCardInner: {
     flex: 1,
-    backgroundColor: "rgba(30, 58, 138, 0.88)",
-    padding: 16,
-    justifyContent: "flex-start",
-    borderBottomWidth: 3,
-    borderBottomColor: COLORS.yellow,
+    padding: spacing.cardSpacing,
+    position: "relative",
+    justifyContent: "space-between",
   },
-  stationOverlayYellow: {
-    flex: 1,
-    backgroundColor: "rgba(251, 191, 36, 0.88)",
-    padding: 16,
-    justifyContent: "flex-start",
-    borderBottomWidth: 3,
-    borderBottomColor: COLORS.navy,
+  heroIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "rgba(255,255,255,0.22)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
   },
-  stationIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  heroCardTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    marginBottom: 2,
+  },
+  heroCardSub: {
+    fontSize: 11,
+    color: "rgba(255,255,255,0.85)",
+    lineHeight: 15,
+  },
+  heroArrow: {
+    position: "absolute",
+    bottom: spacing.cardSpacing,
+    right: spacing.cardSpacing,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 10,
   },
-  stationCardTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: COLORS.white,
-    marginBottom: 5,
-    lineHeight: 18,
+
+  // Sleek Executive Notice Alert Badge
+  sleekNoticeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: spacing.screenPadding,
+    marginTop: spacing.screenPadding,
+    marginBottom: 4,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    overflow: "hidden",
+    gap: 10,
   },
-  stationCardSub: {
-    fontSize: 11.5,
-    color: "rgba(255,255,255,0.85)",
+  noticeBadgeLeft: {
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  alertPulseDot: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#EF4444",
+  },
+  sleekNoticeHeading: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    marginBottom: 1,
+  },
+  sleekNoticeBody: {
+    fontSize: 12,
+    fontWeight: "500",
     lineHeight: 16,
+  },
+  noticeDismissBtn: {
+    padding: 4,
+  },
+
+  // Recently Accessed Stations Cards
+  recentCard: {
+    width: 140,
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 10,
+    alignItems: "flex-start",
+  },
+  recentBadgeIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 6,
+  },
+  recentName: {
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 2,
+    width: "100%",
+  },
+  recentSub: {
+    fontSize: 10,
+    fontWeight: "500",
+  },
+  categoryTitle: {
+    fontSize: 11,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+
+  // Promo Banner Card
+  promoBannerCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: spacing.screenPadding,
+    marginBottom: spacing.section,
+    padding: 16,
+    borderRadius: 7,
+    borderWidth: 1,
+    gap: 12,
+  },
+  promoTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  promoSub: {
+    fontSize: 12,
+  },
+  promoActionBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 7,
+  },
+  promoActionText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+
+  // Explore Nearby Stations Circle Avatars
+  exploreCircleItem: {
+    alignItems: "center",
+    width: 76,
+  },
+  exploreAvatarWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 6,
+  },
+  exploreName: {
+    fontSize: 11,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  exploreDist: {
+    fontSize: 10,
+    marginTop: 1,
   },
 
   // Sections
-  section: { paddingHorizontal: 16, marginBottom: 20 },
+  section: {
+    paddingHorizontal: spacing.screenPadding,
+    marginBottom: spacing.section,
+  },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: spacing.component,
   },
-  sectionTitleRow: { flexDirection: "row", alignItems: "center", gap: 7 },
-  sectionTitle: { fontSize: 15.5, fontWeight: "700", color: COLORS.textDark },
-  viewAll: { fontSize: 13, color: COLORS.navy, fontWeight: "600" },
+  sectionTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  sectionDot: { width: 6, height: 6, borderRadius: 3 },
+  sectionTitle: {
+    ...typography.subtitle,
+    fontSize: 16,
+    color: colors.primary,
+    fontWeight: "700",
+  },
+  viewAllBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+  viewAllText: {
+    ...typography.bodySmall,
+    fontWeight: "600",
+    color: colors.primary,
+  },
 
-  // Emergency
+  // Emergency Cards
   emergencyGrid: {
     flexDirection: "row",
-    gap: 10,
-    marginBottom: 12,
+    gap: spacing.component,
+    marginBottom: spacing.component,
   },
   emergencyCard: {
     flex: 1,
     borderRadius: 12,
-    padding: 14,
     position: "relative",
     overflow: "hidden",
-    minHeight: 110,
+    minHeight: 118,
+  },
+  emergencyCardInner: {
+    flex: 1,
+    padding: spacing.cardSpacing,
+    position: "relative",
+    minHeight: 118,
+    justifyContent: "space-between",
   },
   emergencyIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 10,
   },
   emergencyTitle: {
-    fontSize: 13.5,
+    fontSize: 14,
     fontWeight: "700",
-    color: COLORS.white,
+    color: "#fff",
     marginBottom: 3,
   },
-  emergencySubtitle: { fontSize: 11, color: "rgba(255,255,255,0.85)" },
+  emergencySubtitle: {
+    fontSize: 11,
+    color: "rgba(255,255,255,0.8)",
+    fontWeight: "500",
+  },
   callBadge: {
     position: "absolute",
-    top: 12,
-    right: 12,
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+    top: spacing.cardSpacing,
+    right: spacing.cardSpacing,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
   },
 
-  // WhatsApp — separate section
-  whatsappSection: {
-    marginTop: 4,
-  },
-  whatsappLabelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 10,
-    gap: 8,
-  },
-  whatsappDivider: {
-    flex: 1,
-    height: 1,
-    backgroundColor: COLORS.border,
-  },
-  whatsappLabel: {
-    fontSize: 11,
-    color: COLORS.textLight,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
+  // WhatsApp
   whatsappCard: {
-    backgroundColor: "#128C7E",
+    backgroundColor: "#0E9F6E",
     borderRadius: 12,
-    padding: 14,
+    overflow: "hidden",
+  },
+  whatsappCardInner: {
+    padding: spacing.cardSpacing,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: spacing.component,
   },
   whatsappIconWrap: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
   },
   whatsappTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: COLORS.white,
-    marginBottom: 3,
+    color: "#fff",
+    marginBottom: 2,
   },
-  whatsappSub: {
-    fontSize: 11.5,
-    color: "rgba(255,255,255,0.8)",
-  },
+  whatsappSub: { fontSize: 12, color: "rgba(255,255,255,0.85)" },
   whatsappChevron: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -698,181 +896,196 @@ const styles = StyleSheet.create({
   // Quick Actions
   quickActionsGrid: {
     flexDirection: "row",
-    gap: 12,
-    marginTop: 4,
+    gap: spacing.component,
   },
   quickActionCard: {
     flex: 1,
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: colors.neutral.white,
+    borderRadius: radius.xl,
+    padding: spacing.cardSpacing,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.neutral[200],
   },
   quickActionIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 10,
-    backgroundColor: "#EFF6FF",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 12,
+    marginBottom: 10,
   },
   quickActionTitle: {
-    fontSize: 13.5,
+    fontSize: 14,
     fontWeight: "700",
-    color: COLORS.textDark,
-    marginBottom: 4,
+    color: colors.neutral[900],
+    marginBottom: 3,
   },
-  quickActionSub: { fontSize: 11.5, color: COLORS.textMid, lineHeight: 15 },
+  quickActionSub: { fontSize: 12, color: colors.neutral[500], lineHeight: 16 },
 
-  // Police Services
-  servicesList: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
+  // News
+  newsSection: {
+    backgroundColor: colors.neutral.white,
+    paddingVertical: spacing.cardSpacing,
+    marginBottom: spacing.section,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  newsScrollContent: {
+    paddingHorizontal: spacing.screenPadding,
+    gap: spacing.component,
+    paddingTop: 4,
+  },
+  newsCard: {
+    width: SCREEN_WIDTH * 0.68,
+    borderRadius: radius.xl,
+    backgroundColor: colors.neutral.white,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.neutral[200],
+  },
+  newsImage: { width: "100%", height: 130, resizeMode: "cover" },
+  newsContent: { padding: spacing.cardSpacing },
+  newsDateRow: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 6 },
+  newsDate: { fontSize: 11, color: colors.neutral[500], fontWeight: "500" },
+  newsTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.neutral[900],
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  newsDesc: { fontSize: 12, color: colors.neutral[600], lineHeight: 16 },
+  emptyNews: {
+    paddingVertical: 40,
+    paddingHorizontal: spacing.screenPadding,
+    alignItems: "center",
+    gap: 10,
+  },
+  emptyNewsText: {
+    fontSize: 13,
+    color: colors.neutral[400],
+    textAlign: "center",
+  },
+
+  // Skeleton
+  newsSkeletonCard: {
+    width: SCREEN_WIDTH * 0.68,
+    height: 200,
+    borderRadius: radius.xl,
+    backgroundColor: colors.neutral[100],
+    overflow: "hidden",
+  },
+  skeletonImage: { width: "100%", height: 120, backgroundColor: colors.neutral[200] },
+  skeletonLine: {
+    height: 12,
+    backgroundColor: colors.neutral[200],
+    borderRadius: 6,
+    marginBottom: 6,
+  },
+
+  // Services List
+  servicesList: {
+    backgroundColor: colors.neutral.white,
+    borderRadius: radius.xl,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
   },
   serviceRow: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 14,
-    gap: 12,
+    paddingHorizontal: spacing.cardSpacing,
+    gap: spacing.component,
+    height: componentHeights.listTile,
   },
   serviceRowBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: colors.neutral[100],
   },
   serviceIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 9,
-    backgroundColor: "#EFF6FF",
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: colors.neutral[100],
     alignItems: "center",
     justifyContent: "center",
   },
-  serviceTitle: { fontSize: 14, fontWeight: "600", color: COLORS.textDark },
-  serviceDesc: { fontSize: 12, color: COLORS.textMid, marginTop: 2 },
+  serviceTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.neutral[900],
+    marginBottom: 2,
+  },
+  serviceDesc: { fontSize: 12, color: colors.neutral[500] },
   soonBadge: {
-    backgroundColor: "#F1F5F9",
-    borderRadius: 5,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    backgroundColor: colors.neutral[100],
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.neutral[200],
   },
-  soonText: { fontSize: 10, color: COLORS.textMid, fontWeight: "600" },
-
-  // News
-  newsSection: {
-    backgroundColor: COLORS.white,
-    paddingVertical: 14,
-    marginBottom: 20,
-  },
-  newsScrollContent: { paddingHorizontal: 16, gap: 12 },
-  newsCard: {
-    width: width * 0.62,
-    borderRadius: 12,
-    backgroundColor: COLORS.white,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  newsImage: { width: "100%", height: 140, resizeMode: "cover" },
-  newsContent: { padding: 12 },
-  newsDate: { fontSize: 10.5, color: COLORS.textLight, marginBottom: 5 },
-  newsTitle: {
-    fontSize: 13.5,
-    fontWeight: "700",
-    color: COLORS.textDark,
-    lineHeight: 18,
-    marginBottom: 5,
-  },
-  newsDesc: { fontSize: 12, color: COLORS.textMid, lineHeight: 16 },
-  emptyNews: {
-    padding: 24,
-    alignItems: "center",
-  },
-  emptyNewsText: { fontSize: 13, color: COLORS.textLight },
-
-  // Skeleton
-  newsSkeletonCard: {
-    width: width * 0.62,
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  skeletonImage: { width: "100%", height: 140, backgroundColor: "#E2E8F0" },
-  skeletonTitle: {
-    height: 14,
-    backgroundColor: "#E2E8F0",
-    borderRadius: 4,
-    marginBottom: 8,
-    width: "75%",
-  },
-  skeletonDescription: {
-    height: 12,
-    backgroundColor: "#E2E8F0",
-    borderRadius: 4,
-    width: "100%",
-  },
+  soonText: { fontSize: 11, fontWeight: "600", color: colors.neutral[400] },
 
   // Footer
   footer: {
-    flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.white,
-    marginHorizontal: 16,
-    borderRadius: 12,
-    padding: 14,
-    gap: 12,
-    borderWidth: 1,
-    marginBottom: 30,
-    borderColor: COLORS.border,
+    paddingVertical: 24,
+    gap: 6,
   },
-  footerText: { flex: 1, fontSize: 12.5, color: COLORS.textMid, lineHeight: 17 },
+  footerText: { fontSize: 13, fontWeight: "600", color: colors.neutral[600] },
+  footerSub: { fontSize: 11, color: colors.neutral[400] },
 
   // Modal
   modalOverlay: {
     position: "absolute",
     top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(11, 18, 32, 0.65)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 24,
+    padding: spacing.screenPadding,
   },
   modalBox: {
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: 28,
-    width: "100%",
-    maxWidth: 360,
+    backgroundColor: colors.neutral.white,
+    borderRadius: radius.modal,
+    padding: spacing.section,
     alignItems: "center",
+    width: "100%",
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  modalIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "#FEF3C7",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
   },
   modalTitle: {
-    fontSize: 20,
+    ...typography.subtitle,
+    color: colors.neutral[900],
+    marginBottom: 8,
     fontWeight: "700",
-    color: COLORS.textDark,
-    marginBottom: 10,
   },
   modalMessage: {
-    fontSize: 14,
-    color: COLORS.textMid,
+    ...typography.bodySmall,
+    color: colors.neutral[600],
     textAlign: "center",
-    lineHeight: 20,
     marginBottom: 24,
+    lineHeight: 20,
   },
   modalButton: {
-    backgroundColor: COLORS.navy,
-    paddingVertical: 13,
-    borderRadius: 10,
-    width: "100%",
+    backgroundColor: colors.primary,
+    height: componentHeights.defaultButton,
+    paddingHorizontal: 40,
+    borderRadius: radius.button,
     alignItems: "center",
+    justifyContent: "center",
   },
-  modalButtonText: { color: COLORS.white, fontSize: 15, fontWeight: "700" },
+  modalButtonText: { color: "#fff", fontWeight: "700", fontSize: 15 },
 });
 
 export default Home;

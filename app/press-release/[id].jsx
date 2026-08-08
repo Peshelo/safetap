@@ -10,25 +10,23 @@ import {
   StyleSheet,
   Linking,
   Modal,
-  SafeAreaView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import React, { useEffect, useState } from "react";
-import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import * as Sharing from "expo-sharing";
-import * as FileSystem from "expo-file-system";
-import pb from "../../lib/connection";
+import api, { resolveMediaUrl } from "../../src/services/api";
+import AppHeader from "../../src/components/AppHeader";
 
 const { width } = Dimensions.get("window");
+const FALLBACK_IMAGE = require("../../assets/images/fallback.png");
 
 export default function NewsDetails() {
   const { id } = useLocalSearchParams();
-  const navigation = useNavigation();
-  const router = useRouter(); 
+  const router = useRouter();
 
   const [article, setArticle] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [attachments, setAttachments] = useState([]);
   const [imageViewerVisible, setImageViewerVisible] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
 
@@ -38,157 +36,111 @@ export default function NewsDetails() {
 
   const fetchArticle = async () => {
     try {
-      const record = await pb.collection("news").getOne(id);
+      const record = await api.publications.get(id);
       setArticle(record);
-
-      const processed = [];
-
-      if (record.file) {
-        const url = pb.files.getURL(record, record.file);
-        const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(record.file);
-
-        processed.push({
-          type: isImage ? "image" : "document",
-          filename: record.file,
-          url,
-        });
-      }
-
-      if (Array.isArray(record.attachments)) {
-        record.attachments.forEach((name) => {
-          const url = pb.files.getURL(record, name);
-          const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(name);
-
-          processed.push({
-            type: isImage ? "image" : "document",
-            filename: name,
-            url,
-          });
-        });
-      }
-
-      setAttachments(processed);
     } catch (e) {
-      console.error(e);
-      Alert.alert("Error", "Failed to load article");
+      console.log("Failed to load article:", e);
+      Alert.alert("Error", "Failed to load article details");
     } finally {
       setLoading(false);
     }
   };
 
-  const shareArticle = async () => {
-    try {
-      if (!article) return;
-
-      const text = `${article.title}\n\n${article.description ?? ""}`;
-
-      const image = attachments.find((a) => a.type === "image");
-      if (image) {
-        const fileName = image.url.split("/").pop();
-        const path = FileSystem.cacheDirectory + fileName;
-        const { uri } = await FileSystem.downloadAsync(image.url, path);
-        await Sharing.shareAsync(uri);
-      } else {
-        await Sharing.shareAsync(text);
-      }
-    } catch (e) {
-      Alert.alert("Error", "Unable to share article");
-    }
-  };
-
-  const images = attachments.filter((a) => a.type === "image");
-  const documents = attachments.filter((a) => a.type === "document");
-
   if (loading) {
     return (
       <View style={styles.loading}>
         <Stack.Screen options={{ headerShown: false }} />
-        <ActivityIndicator size="large" />
-        <Text>Loading article…</Text>
+        <ActivityIndicator size="large" color="#0052CC" />
+        <Text style={{ marginTop: 12, color: "#64748B" }}>Loading official release...</Text>
       </View>
     );
   }
 
+  if (!article) {
+    return (
+      <View style={styles.container}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <AppHeader title="Press Release" subtitle="ZRP Official Publication" showBack={true} />
+        <View style={styles.loading}>
+          <Text style={{ color: "#64748B" }}>Article not found.</Text>
+        </View>
+      </View>
+    );
+  }
+
+  const coverUrl = resolveMediaUrl(article.cover_image_url);
+
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
-          <Ionicons name="close" size={22} />
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={shareArticle} style={styles.iconBtn}>
-          <Ionicons name="share-outline" size={22} />
-        </TouchableOpacity>
-      </View>
+      {/* Top Header */}
+      <AppHeader
+        title="Official Press Release"
+        subtitle="Zimbabwe Republic Police Command"
+        showBack={true}
+      />
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>{article.title}</Text>
+        <View style={styles.contentPadding}>
+          <Text style={styles.categoryBadge}>{article.category || "Press Release"}</Text>
+          <Text style={styles.title}>{article.title}</Text>
+          <Text style={styles.dateText}>
+            {article.published_at
+              ? new Date(article.published_at).toLocaleDateString("en-US", {
+                  weekday: "long", year: "numeric", month: "long", day: "numeric"
+                })
+              : "Official Release"}
+          </Text>
+        </View>
 
-        {images[0] && (
+        {coverUrl && (
           <TouchableOpacity onPress={() => {
-            setSelectedImage(images[0].url);
+            setSelectedImage(coverUrl);
             setImageViewerVisible(true);
           }}>
-            <Image source={{ uri: images[0].url }} style={styles.mainImage} />
+            <Image source={{ uri: coverUrl }} style={styles.mainImage} defaultSource={FALLBACK_IMAGE} />
           </TouchableOpacity>
         )}
 
-        {article.description && (
-          <Text style={styles.description}>
-            {article.description.replace(/<[^>]*>/g, "")}
-          </Text>
-        )}
+        <View style={styles.contentPadding}>
+          {article.summary && (
+            <View style={styles.summaryBox}>
+              <Text style={styles.summaryText}>{article.summary}</Text>
+            </View>
+          )}
 
-        {article.content && (
-          <Text style={styles.content}>
-            {article.content.replace(/<[^>]*>/g, "")}
-          </Text>
-        )}
+          {article.content && (
+            <Text style={styles.bodyContent}>
+              {article.content.replace(/<[^>]*>/g, "")}
+            </Text>
+          )}
 
-        {images.length > 1 && (
-          <>
-            <Text style={styles.sectionTitle}>More Images</Text>
-            <ScrollView horizontal>
-              {images.slice(1).map((img, i) => (
+          {article.attachments && article.attachments.length > 0 && (
+            <View style={styles.attachmentsSection}>
+              <Text style={styles.sectionTitle}>Official Attachments</Text>
+              {article.attachments.map((att, i) => (
                 <TouchableOpacity
                   key={i}
-                  onPress={() => {
-                    setSelectedImage(img.url);
-                    setImageViewerVisible(true);
-                  }}
+                  style={styles.docRow}
+                  onPress={() => Linking.openURL(resolveMediaUrl(att.url))}
                 >
-                  <Image source={{ uri: img.url }} style={styles.thumb} />
+                  <MaterialIcons name="insert-drive-file" size={22} color="#0052CC" />
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={styles.docName} numberOfLines={1}>{att.name}</Text>
+                    <Text style={styles.docSize}>{att.size || "PDF Document"}</Text>
+                  </View>
+                  <Ionicons name="download-outline" size={18} color="#0052CC" />
                 </TouchableOpacity>
               ))}
-            </ScrollView>
-          </>
-        )}
-
-        {documents.length > 0 && (
-          <>
-            <Text style={styles.sectionTitle}>Documents</Text>
-            {documents.map((doc, i) => (
-              <TouchableOpacity
-                key={i}
-                style={styles.doc}
-                onPress={() => Linking.openURL(doc.url)}
-              >
-                <MaterialIcons name="insert-drive-file" size={24} />
-                <Text style={styles.docText} numberOfLines={1}>
-                  {doc.filename}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </>
-        )}
+            </View>
+          )}
+        </View>
 
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* Image Viewer */}
+      {/* Full Image Viewer */}
       <Modal visible={imageViewerVisible} transparent>
         <View style={styles.viewer}>
           <TouchableOpacity
@@ -197,90 +149,76 @@ export default function NewsDetails() {
           >
             <Ionicons name="close" size={28} color="white" />
           </TouchableOpacity>
-
           {selectedImage && (
             <Image source={{ uri: selectedImage }} style={styles.fullImage} resizeMode="contain" />
           )}
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+  container: { flex: 1, backgroundColor: "#FFFFFF" },
   loading: { flex: 1, justifyContent: "center", alignItems: "center" },
   header: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
   },
   iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#eee",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#F1F5F9",
     justifyContent: "center",
     alignItems: "center",
   },
-  title: {
-    fontSize: 24,
+  headerTitle: { fontSize: 16, fontWeight: "700", color: "#0F172A" },
+  contentPadding: { padding: 20 },
+  categoryBadge: {
+    alignSelf: "flex-start",
+    fontSize: 11,
     fontWeight: "700",
-    paddingHorizontal: 20,
-    marginBottom: 16,
+    color: "#0052CC",
+    backgroundColor: "#E6EFFC",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginBottom: 10,
   },
-  mainImage: {
-    width: width - 40,
-    height: 240,
-    marginHorizontal: 20,
-    borderRadius: 12,
+  title: { fontSize: 22, fontWeight: "800", color: "#1E3A8A", lineHeight: 28, marginBottom: 8 },
+  dateText: { fontSize: 12, color: "#64748B", marginBottom: 14 },
+  mainImage: { width: width - 40, height: 220, marginHorizontal: 20, borderRadius: 12 },
+  summaryBox: {
+    backgroundColor: "#F8FAFC",
+    borderLeftWidth: 4,
+    borderLeftColor: "#0052CC",
+    padding: 14,
+    marginBottom: 20,
+    borderRadius: 4,
   },
-  description: {
-    padding: 20,
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  content: {
-    paddingHorizontal: 20,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    paddingHorizontal: 20,
-    marginTop: 24,
-    marginBottom: 12,
-  },
-  thumb: {
-    width: 120,
-    height: 120,
-    marginLeft: 20,
-    borderRadius: 8,
-  },
-  doc: {
+  summaryText: { fontSize: 14, fontWeight: "600", color: "#334155", lineHeight: 20 },
+  bodyContent: { fontSize: 14.5, color: "#1E293B", lineHeight: 24 },
+  attachmentsSection: { marginTop: 24, borderTopWidth: 1, borderTopColor: "#E2E8F0", paddingTop: 16 },
+  sectionTitle: { fontSize: 15, fontWeight: "700", color: "#0F172A", marginBottom: 12 },
+  docRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    backgroundColor: "#F8FAFC",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
-  docText: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  viewer: {
-    flex: 1,
-    backgroundColor: "black",
-    justifyContent: "center",
-  },
-  viewerClose: {
-    position: "absolute",
-    top: 50,
-    right: 20,
-    zIndex: 10,
-  },
-  fullImage: {
-    width: "100%",
-    height: "100%",
-  },
+  docName: { fontSize: 13, fontWeight: "600", color: "#0F172A" },
+  docSize: { fontSize: 11, color: "#64748B" },
+  viewer: { flex: 1, backgroundColor: "black", justifyContent: "center" },
+  viewerClose: { position: "absolute", top: 50, right: 20, zIndex: 10 },
+  fullImage: { width: "100%", height: "100%" },
 });

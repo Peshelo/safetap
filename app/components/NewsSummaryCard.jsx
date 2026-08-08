@@ -1,12 +1,13 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import pb from "../../lib/connection";
+import { resolveMediaUrl } from "../../src/services/api";
 
 const NewsSummaryCard = ({ item, onPress, showDescription = true }) => {
   const getFileUrl = (item) => {
-    if (!item.file) return null;
-    return pb.files.getURL(item, item.file);
+    if (item.cover_image_url) return resolveMediaUrl(item.cover_image_url);
+    if (item.file) return resolveMediaUrl(item.file);
+    return null;
   };
 
   const fileUrl = getFileUrl(item);

@@ -14,9 +14,10 @@ import {
 } from "react-native";
 import React, { useEffect, useState, useCallback } from "react";
 import { Stack, useRouter } from "expo-router";
-import pb from "../../lib/connection";
+import api, { resolveMediaUrl } from "../../src/services/api";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import AppHeader from "../../src/components/AppHeader";
 
 const { width } = Dimensions.get("window");
 const PAGE_SIZE = 10;
@@ -57,28 +58,22 @@ const News = () => {
         setLoadingMore(true);
       }
 
-      const queryParams = {
-        page: page,
-        perPage: PAGE_SIZE,
-        sort: sortBy === "newest" ? "-created" : "created",
-      };
+      const params = { is_published: true, page, page_size: PAGE_SIZE };
+      if (categoryFilter !== "all") params.category = categoryFilter;
 
-      const records = await pb.collection("news").getList(
-        queryParams.page,
-        queryParams.perPage,
-        queryParams
-      );
+      const res = await api.publications.list(params);
+      const items = res.items || [];
 
       if (isRefresh || page === 1) {
-        setNews(records.items);
-        setFilteredNews(records.items);
+        setNews(items);
+        setFilteredNews(items);
       } else {
-        setNews(prev => [...prev, ...records.items]);
-        setFilteredNews(prev => [...prev, ...records.items]);
+        setNews(prev => [...prev, ...items]);
+        setFilteredNews(prev => [...prev, ...items]);
       }
 
-      setTotalItems(records.totalItems);
-      setHasMore(records.items.length === PAGE_SIZE);
+      setTotalItems(res.total || items.length);
+      setHasMore(items.length === PAGE_SIZE);
       setCurrentPage(page);
     } catch (err) {
       console.error("Failed to fetch news", err);
@@ -95,12 +90,8 @@ const News = () => {
   }, [sortBy]);
 
   const getImageUrl = (item) => {
-    if (item.file) {
-      const fileUrl = pb.files.getURL(item, item.file);
-      const ext = fileUrl.split(".").pop().toLowerCase();
-      if (["jpg", "jpeg", "png", "gif", "webp"].includes(ext)) {
-        return fileUrl;
-      }
+    if (item.cover_image_url) {
+      return resolveMediaUrl(item.cover_image_url);
     }
     return FALLBACK_IMAGE;
   };
@@ -336,22 +327,18 @@ const News = () => {
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
       
-      {/* Header from EmergencyContacts */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>News & Press</Text>
-        <TouchableOpacity 
-          style={styles.headerRight}
-          onPress={() => setShowSearch(!showSearch)}
-        >
-          <Ionicons name="search" size={20} color="#FFFFFF" />
-        </TouchableOpacity>
-      </View>
+      {/* App Bar (ZRP Blue with logo and safe area top inset) */}
+      <AppHeader
+        title="News & Press Releases"
+        subtitle="Zimbabwe Republic Police Official Releases"
+        showBack={true}
+        rightActions={[
+          {
+            iconName: "search-outline",
+            onPress: () => setShowSearch(!showSearch),
+          },
+        ]}
+      />
 
       {/* Search Bar */}
       {renderSearchBar()}

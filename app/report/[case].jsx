@@ -16,8 +16,7 @@ import { Picker } from "@react-native-picker/picker";
 import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
 import * as Clipboard from "expo-clipboard";
-import * as SecureStore from 'expo-secure-store';
-import pb from "../../lib/connection";
+import api from "../../src/services/api";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -161,7 +160,7 @@ const Case = () => {
         });
       }
 
-      const record = await pb.collection("cases").create(data);
+      const record = await api.cases.create(data);
       setCaseId(record.id);
       setSuccess(true);
   

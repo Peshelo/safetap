@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,366 +10,248 @@ import {
   RefreshControl,
   Modal,
   ScrollView,
-  Dimensions,
   Image,
-  Linking,
-  Platform,
   Alert,
+  Linking,
+  StatusBar,
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
-import pb from "../../lib/connection";
-import { Ionicons, MaterialIcons, MaterialCommunityIcons, FontAwesome5 } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as Sharing from "expo-sharing";
-import * as WebBrowser from "expo-web-browser";
+import api, { resolveMediaUrl } from "../../src/services/api";
+import analyticsService from "../../src/services/analyticsService";
+import AppHeader from "../../src/components/AppHeader";
+import useNetworkStatus from "../hooks/useNetworkStatus";
+import OfflineBanner from "../components/OfflineBanner";
+import { useAppTheme } from "../../src/context/ThemeContext";
 
-const { width, height } = Dimensions.get("window");
 const PAGE_SIZE = 10;
-
-// ─── Fallback Image ────────────────────────────────────────────────────────────
 const FALLBACK_IMAGE = require("../../assets/images/fallback.png");
+const ZRP_LOGO = require("../../assets/images/logo-alternate.png");
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+const CATEGORIES = [
+  { key: "ALL", label: "All Publications" },
+  { key: "Press Release", label: "Press Releases" },
+  { key: "Public Notice", label: "Public Notices" },
+  { key: "Alert", label: "Safety Alerts" },
+  { key: "Incident Report", label: "Incident Reports" },
+];
+
+const CATEGORY_COLORS = {
+  "Press Release": { bg: "#E6EFFC", text: "#0052CC" },
+  "Public Notice": { bg: "#FEF3C7", text: "#D97706" },
+  "Alert": { bg: "#FEE2E2", text: "#DC2626" },
+  "Incident Report": { bg: "#F3E8FF", text: "#7C3AED" },
+};
+
+const SafeArticleImage = ({ src, style, resizeMode = "cover" }) => {
+  const [imgError, setImgError] = useState(false);
+  const resolvedUrl = resolveMediaUrl(src);
+
+  return (
+    <Image
+      source={resolvedUrl && !imgError ? { uri: resolvedUrl } : FALLBACK_IMAGE}
+      style={style}
+      resizeMode={resizeMode}
+      onError={() => setImgError(true)}
+    />
+  );
+};
+
 const News = () => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const isOnline = useNetworkStatus();
+  const { colors, isDark } = useAppTheme();
 
   const [news, setNews] = useState([]);
-  const [filteredNews, setFilteredNews] = useState([]);
+  const [activeCategory, setActiveCategory] = useState("ALL");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
-  const [sortBy, setSortBy] = useState("newest");
-  const [categoryFilter, setCategoryFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
-  const [sharing, setSharing] = useState(false);
 
-  const categories = [
-    { id: "all", label: "All", icon: "apps-outline" },
-    { id: "press", label: "Press Releases", icon: "newspaper-outline" },
-    { id: "announcements", label: "Announcements", icon: "megaphone-outline" },
-    { id: "updates", label: "Updates", icon: "sync-outline" },
-  ];
+  useEffect(() => {
+    analyticsService.trackFeature("News & Press Hub");
+  }, []);
 
-  // ── Data fetching ──────────────────────────────────────────────────────────
   const fetchNews = async (page = 1, isRefresh = false) => {
     try {
       if (page === 1) setLoading(true);
       else setLoadingMore(true);
 
-      const records = await pb.collection("news").getList(page, PAGE_SIZE, {
-        sort: sortBy === "newest" ? "-created" : "created",
-      });
+      const params = { is_published: true, page, page_size: PAGE_SIZE };
+      if (activeCategory !== "ALL") params.category = activeCategory;
+      if (search.trim()) params.search = search.trim();
+
+      const res = await api.publications.list(params);
+      const items = res.items || [];
 
       if (isRefresh || page === 1) {
-        setNews(records.items);
-        setFilteredNews(records.items);
+        setNews(items);
       } else {
-        setNews((prev) => [...prev, ...records.items]);
-        setFilteredNews((prev) => [...prev, ...records.items]);
+        setNews((prev) => [...prev, ...items]);
       }
 
-      setHasMore(records.items.length === PAGE_SIZE);
+      setHasMore(items.length === PAGE_SIZE);
       setCurrentPage(page);
     } catch (err) {
-      console.error("Failed to fetch news", err);
+      console.log("Failed to fetch news from API:", err);
     } finally {
       setLoading(false);
       setLoadingMore(false);
     }
   };
 
+  useEffect(() => {
+    fetchNews(1, true);
+  }, [activeCategory]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchNews(1, true);
     setRefreshing(false);
-  }, [sortBy]);
+  }, [activeCategory, search]);
+
+  const handleSearchSubmit = () => {
+    fetchNews(1, true);
+  };
 
   const loadMore = () => {
-    if (!hasMore || loadingMore) return;
+    if (!hasMore || loadingMore || loading) return;
     fetchNews(currentPage + 1);
   };
 
-  useEffect(() => {
-    fetchNews(1, true);
-  }, [sortBy]);
-
-  useEffect(() => {
-    const filtered = news.filter((item) => {
-      const matchSearch =
-        !search.trim() ||
-        item.title?.toLowerCase().includes(search.toLowerCase()) ||
-        item.description?.toLowerCase().includes(search.toLowerCase());
-      const matchCat =
-        categoryFilter === "all" ||
-        (item.category?.toLowerCase() || "press").includes(categoryFilter.toLowerCase());
-      return matchSearch && matchCat;
-    });
-    setFilteredNews(filtered);
-  }, [search, categoryFilter, news]);
-
-  // ── Helpers ────────────────────────────────────────────────────────────────
-  const getImageUrl = (item) => {
-    if (item.file) {
-      const url = pb.files.getURL(item, item.file);
-      const ext = url.split(".").pop().toLowerCase();
-      if (["jpg", "jpeg", "png", "gif", "webp"].includes(ext)) return url;
-    }
-    return null;
+  const openArticleDetails = (item) => {
+    setSelectedArticle(item);
+    setIsModalVisible(true);
+    analyticsService.trackFeature(`News View: ${item.title}`);
   };
 
-  const formatRelativeDate = (dateString) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now - date);
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
-    const diffMonths = Math.floor(diffDays / 30);
-    const diffYears = Math.floor(diffDays / 365);
-    
-    if (diffHours < 1) return "Just now";
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays === 1) return "Yesterday";
-    if (diffDays < 7) return `${diffDays}d ago`;
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
-    if (diffDays < 365) return `${diffMonths}mo ago`;
-    return `${diffYears}y ago`;
+  const openExternalLink = (url) => {
+    if (!url) return;
+    Linking.openURL(url).catch(() => {
+      Alert.alert("Link Error", "Unable to open external link.");
+    });
   };
 
   const formatFullDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  };
-
-  const getCategoryColor = (cat) => {
-    const map = {
-      press: "#DC2626",
-      announcements: "#7C3AED",
-      updates: "#059669",
-    };
-    return map[(cat || "press").toLowerCase()] || "#1E3A8A";
-  };
-
-  const getCategoryIcon = (cat) => {
-    const map = {
-      press: "newspaper-outline",
-      announcements: "megaphone-outline",
-      updates: "sync-outline",
-    };
-    return map[(cat || "press").toLowerCase()] || "document-text-outline";
-  };
-
-  // ── Share article using expo-sharing (text only) ───────────────────────────
-  const shareArticle = async (article) => {
-    if (!article) return;
-    
-    setSharing(true);
+    if (!dateString) return "Official Release";
     try {
-      const shareText = `📰 ${article.title}\n\n${article.description?.replace(/<[^>]*>/g, "") || "Read more"}\n\n🔗 Shared via SafeTap - Zimbabwe Republic Police App`;
-      
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(shareText, {
-          dialogTitle: "Share Article",
-          mimeType: "text/plain",
-
-        });
-      } else {
-        Alert.alert("Error", "Sharing is not available on this device");
-      }
-    } catch (error) {
-      console.error("Share error:", error);
-      Alert.alert("Error", "Failed to share article");
-    } finally {
-      setSharing(false);
-    }
-  };
-
-  // ── Open external link using expo-web-browser ──────────────────────────────
-  const openExternalLink = async (url) => {
-    if (!url) return;
-    
-    try {
-      await WebBrowser.openBrowserAsync(url, {
-        presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
-        controlsColor: "#1E3A8A",
-        toolbarColor: "#1E3A8A",
+      const date = new Date(dateString);
+      return date.toLocaleDateString("en-US", {
+        weekday: "short",
+        year: "numeric",
+        month: "short",
+        day: "numeric",
       });
-    } catch (error) {
-      console.error("Error opening link:", error);
-      Alert.alert("Error", "Could not open the link");
+    } catch (e) {
+      return "Official Release";
     }
   };
 
-  // ── Extract links from content ────────────────────────────────────────────
-  const extractLinks = (html) => {
-    const linkRegex = /<a\s+(?:[^>]*?\s+)?href=(["'])(.*?)\1/g;
-    const links = [];
-    let match;
-    while ((match = linkRegex.exec(html)) !== null) {
-      links.push(match[2]);
-    }
-    return links;
-  };
+  const renderRichTextContent = (content) => {
+    if (!content) return <Text style={[styles.modalDescription, { color: colors.textPrimary }]}>No detailed text content provided.</Text>;
 
-  // ── Apply filters ─────────────────────────────────────────────────────────
-  const applyFilters = () => {
-    setShowFilters(false);
-  };
+    const parts = content.split(/(<img[^>]+src=["'][^"']+["'][^>]*>)/gi);
 
-  const resetFilters = () => {
-    setSortBy("newest");
-    setCategoryFilter("all");
-    setSearch("");
-  };
-
-  // ── Group by time period with detailed sections ───────────────────────────
-  const groupByTimePeriod = (articles) => {
-    const now = new Date();
-    const groups = {
-      today: [],
-      yesterday: [],
-      thisWeek: [],
-      lastWeek: [],
-      thisMonth: [],
-      lastMonth: [],
-      older: [],
-    };
-
-    articles.forEach((article) => {
-      const date = new Date(article.created);
-      const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
-      
-      if (diffDays === 0) {
-        groups.today.push(article);
-      } else if (diffDays === 1) {
-        groups.yesterday.push(article);
-      } else if (diffDays < 7) {
-        groups.thisWeek.push(article);
-      } else if (diffDays < 14) {
-        groups.lastWeek.push(article);
-      } else if (diffDays < 30) {
-        groups.thisMonth.push(article);
-      } else if (diffDays < 60) {
-        groups.lastMonth.push(article);
-      } else {
-        groups.older.push(article);
+    return parts.map((part, index) => {
+      const imgMatch = part.match(/<img[^>]+src=["']([^"']+)["'][^>]*>/i);
+      if (imgMatch) {
+        const src = imgMatch[1];
+        return (
+          <View key={index} style={{ marginVertical: 12, alignItems: 'center', backgroundColor: colors.sectionBg, borderRadius: 8, padding: 4, borderWidth: 1, borderColor: colors.border }}>
+            <SafeArticleImage
+              src={src}
+              style={{ width: '100%', height: 220, borderRadius: 6 }}
+              resizeMode="contain"
+            />
+          </View>
+        );
       }
+
+      const cleanText = part
+        .replace(/<p[^>]*>/gi, "\n\n")
+        .replace(/<h[1-6][^>]*>/gi, "\n\n")
+        .replace(/<li[^>]*>/gi, "\n• ")
+        .replace(/<br\s*[\/]?>/gi, "\n")
+        .replace(/<[^>]*>/g, "")
+        .replace(/&nbsp;/g, " ")
+        .trim();
+
+      if (!cleanText) return null;
+
+      return (
+        <Text key={index} style={[styles.modalDescription, { color: colors.textPrimary }]}>
+          {cleanText}
+        </Text>
+      );
     });
-
-    return groups;
   };
 
-  // ── Get section title and icon ────────────────────────────────────────────
-  const getSectionInfo = (sectionKey) => {
-    const sectionMap = {
-      today: { title: "Today", icon: "sunny-outline", color: "#F59E0B" },
-      yesterday: { title: "Yesterday", icon: "time-outline", color: "#6B7280" },
-      thisWeek: { title: "This Week", icon: "calendar-outline", color: "#3B82F6" },
-      lastWeek: { title: "Last Week", icon: "calendar-outline", color: "#8B5CF6" },
-      thisMonth: { title: "This Month", icon: "calendar-outline", color: "#10B981" },
-      lastMonth: { title: "Last Month", icon: "calendar-outline", color: "#EC489A" },
-      older: { title: "Older", icon: "archive-outline", color: "#6B7280" },
-    };
-    return sectionMap[sectionKey];
-  };
-
-  // ── News Card Component (Image first) ──────────────────────────────────────
-  const NewsCard = ({ item }) => {
-    const imageUrl = getImageUrl(item);
-    const category = item.category || "Press Release";
-    const catColor = getCategoryColor(category);
-    const relativeDate = formatRelativeDate(item.created);
+  const renderNewsCard = ({ item }) => {
+    const catColors = CATEGORY_COLORS[item.category] || { bg: "#E6EFFC", text: "#0052CC" };
 
     return (
       <TouchableOpacity
-        style={styles.newsCard}
-        onPress={() => {
-          setSelectedArticle(item);
-          setIsModalVisible(true);
-        }}
-        activeOpacity={0.9}
+        style={[styles.newsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        onPress={() => openArticleDetails(item)}
+        activeOpacity={0.88}
       >
-        <Image
-          source={imageUrl ? { uri: imageUrl } : FALLBACK_IMAGE}
+        <SafeArticleImage
+          src={item.cover_image_url}
           style={styles.newsImage}
+          resizeMode="cover"
         />
         <View style={styles.newsContent}>
           <View style={styles.newsHeader}>
-            {/* <View style={[styles.categoryChip, { backgroundColor: `${catColor}15` }]}>
-              <Ionicons name={getCategoryIcon(category)} size={12} color={catColor} />
-              <Text style={[styles.categoryText, { color: catColor }]}>{category}</Text>
-            </View> */}
-            <Text style={styles.newsDate}>{relativeDate}</Text>
+            <View style={[styles.categoryBadge, { backgroundColor: catColors.bg }]}>
+              <Text style={[styles.categoryBadgeText, { color: catColors.text }]}>
+                {item.category || "Press Release"}
+              </Text>
+            </View>
+            <Text style={[styles.newsDate, { color: colors.textMuted }]}>{formatFullDate(item.published_at)}</Text>
           </View>
-          <Text style={styles.newsTitle} numberOfLines={2}>
+
+          <Text style={[styles.newsTitle, { color: colors.primary }]} numberOfLines={2}>
             {item.title}
           </Text>
-          <Text style={styles.newsExcerpt} numberOfLines={2}>
-            {item.description?.replace(/<[^>]*>/g, "") || "Click to read more..."}
-          </Text>
-          <View style={styles.newsFooter}>
-            <Text style={[styles.readMoreLink, { color: catColor }]}>Read full story</Text>
-            <Ionicons name="chevron-forward" size={14} color={catColor} />
+
+          {item.summary ? (
+            <Text style={[styles.newsExcerpt, { color: colors.textSecondary }]} numberOfLines={2}>
+              {item.summary}
+            </Text>
+          ) : (
+            <Text style={[styles.newsExcerpt, { color: colors.textSecondary }]} numberOfLines={2}>
+              {item.content ? item.content.replace(/<[^>]*>/g, "") : ""}
+            </Text>
+          )}
+
+          <View style={[styles.newsFooter, { borderTopColor: colors.border }]}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <Text style={[styles.readMoreLink, { color: colors.primary }]}>Read Communication</Text>
+              <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+            </View>
+
+            {item.view_count !== undefined && (
+              <View style={styles.viewsTag}>
+                <Ionicons name="eye-outline" size={13} color={colors.textMuted} />
+                <Text style={[styles.viewsText, { color: colors.textMuted }]}>{item.view_count}</Text>
+              </View>
+            )}
           </View>
         </View>
       </TouchableOpacity>
     );
   };
 
-  // ── Render grouped sections ───────────────────────────────────────────────
-  const renderGroupedSections = () => {
-    const groups = groupByTimePeriod(filteredNews);
-    const sections = [
-      { key: "today", data: groups.today },
-      { key: "yesterday", data: groups.yesterday },
-      { key: "thisWeek", data: groups.thisWeek },
-      { key: "lastWeek", data: groups.lastWeek },
-      { key: "thisMonth", data: groups.thisMonth },
-      { key: "lastMonth", data: groups.lastMonth },
-      { key: "older", data: groups.older },
-    ];
-
-    return sections.map((section) => {
-      if (section.data.length === 0) return null;
-      
-      const sectionInfo = getSectionInfo(section.key);
-      
-      return (
-        <View key={section.key} style={styles.sectionContainer}>
-          <View style={styles.sectionHeader}>
-            <View style={[styles.sectionIconContainer, { backgroundColor: `${sectionInfo.color}15` }]}>
-              <Ionicons name={sectionInfo.icon} size={20} color={sectionInfo.color} />
-            </View>
-            <Text style={styles.sectionTitle}>{sectionInfo.title}</Text>
-            <Text style={styles.sectionCount}>({section.data.length})</Text>
-          </View>
-          {section.data.map((item) => (
-            <NewsCard key={item.id} item={item} />
-          ))}
-        </View>
-      );
-    });
-  };
-
-  // ─── Full Screen Modal for Article ─────────────────────────────────────────
   const ArticleModal = () => {
     if (!selectedArticle) return null;
-
-    const imageUrl = getImageUrl(selectedArticle);
-    const category = selectedArticle.category || "Press Release";
-    const catColor = getCategoryColor(category);
-    const fullDate = formatFullDate(selectedArticle.created);
-    const links = extractLinks(selectedArticle.description || "");
+    const catColors = CATEGORY_COLORS[selectedArticle.category] || { bg: "#E6EFFC", text: "#0052CC" };
 
     return (
       <Modal
@@ -378,886 +260,401 @@ const News = () => {
         transparent={false}
         onRequestClose={() => setIsModalVisible(false)}
       >
-        <View style={styles.modalContainer}>
-          {/* Modal Header */}
-          <View style={[styles.modalHeader, { paddingTop: insets.top + 12 }]}>
+        <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+          <View style={[styles.modalHeaderBar, { height: 56 + insets.top, paddingTop: insets.top, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
             <TouchableOpacity
               style={styles.modalCloseButton}
               onPress={() => setIsModalVisible(false)}
             >
-              <Ionicons name="close" size={24} color="#1F2937" />
+              <Ionicons name="close" size={24} color={colors.textPrimary} />
             </TouchableOpacity>
-            <Text style={styles.modalHeaderTitle}>Article</Text>
-            {/* <TouchableOpacity
-              style={styles.modalShareButton}
-              onPress={() => shareArticle(selectedArticle)}
-              disabled={sharing}
-            >
-              {sharing ? (
-                <ActivityIndicator size="small" color="#1E3A8A" />
-              ) : (
-                <Ionicons name="share-outline" size={22} color="#1E3A8A" />
-              )}
-            </TouchableOpacity> */}
+            <Text style={[styles.modalHeaderTitle, { color: colors.textPrimary }]}>Official Press Communication</Text>
+            <View style={{ width: 40 }} />
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false}>
-            <Image
-              source={imageUrl ? { uri: imageUrl } : FALLBACK_IMAGE}
+            <SafeArticleImage
+              src={selectedArticle.cover_image_url}
               style={styles.modalImage}
+              resizeMode="cover"
             />
-            
+
             <View style={styles.modalContent}>
-              <View style={styles.modalMeta}>
-                <View style={[styles.modalCategoryBadge, { backgroundColor: `${catColor}15` }]}>
-                  <Ionicons name={getCategoryIcon(category)} size={14} color={catColor} />
-                  <Text style={[styles.modalCategoryText, { color: catColor }]}>
-                    {category}
+              <View style={styles.modalMetaRow}>
+                <View style={[styles.categoryBadge, { backgroundColor: catColors.bg }]}>
+                  <Text style={[styles.categoryBadgeText, { color: catColors.text }]}>
+                    {selectedArticle.category || "Press Release"}
                   </Text>
                 </View>
-                <Text style={styles.modalDate}>{fullDate}</Text>
+                <Text style={[styles.modalDate, { color: colors.textMuted }]}>{formatFullDate(selectedArticle.published_at)}</Text>
               </View>
 
-              <Text style={styles.modalTitle}>{selectedArticle.title}</Text>
-              
-              <Text style={styles.modalDescription}>
-                {selectedArticle.description?.replace(/<[^>]*>/g, "") || "No description available"}
-              </Text>
+              <Text style={[styles.modalTitle, { color: colors.primary }]}>{selectedArticle.title}</Text>
 
-              {/* External Links */}
-              {links.length > 0 && (
-                <View style={styles.linksSection}>
-                  <Text style={styles.linksTitle}>Related Links</Text>
-                  {links.map((link, index) => (
+              {/* Summary box */}
+              {selectedArticle.summary && (
+                <View style={[styles.modalSummaryBox, { backgroundColor: colors.sectionBg, borderColor: colors.border, borderLeftColor: colors.primary }]}>
+                  <Text style={[styles.modalSummaryText, { color: colors.textPrimary }]}>{selectedArticle.summary}</Text>
+                </View>
+              )}
+
+              {/* Body Text & Rich Images */}
+              {renderRichTextContent(selectedArticle.content)}
+
+              {/* Downloadable Attachments */}
+              {selectedArticle.attachments && selectedArticle.attachments.length > 0 && (
+                <View style={[styles.attachmentsSection, { borderTopColor: colors.border }]}>
+                  <Text style={[styles.attachmentsHeader, { color: colors.textPrimary }]}>Official Attachments</Text>
+                  {selectedArticle.attachments.map((att, i) => (
                     <TouchableOpacity
-                      key={index}
-                      style={styles.linkItem}
-                      onPress={() => openExternalLink(link)}
+                      key={i}
+                      style={[styles.attachmentCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                      onPress={() => openExternalLink(resolveMediaUrl(att.url))}
                     >
-                      <Ionicons name="open-outline" size={16} color="#3B82F6" />
-                      <Text style={styles.linkText} numberOfLines={1}>
-                        {link}
+                      <Ionicons name="document-text-outline" size={20} color={colors.primary} />
+                      <Text style={[styles.attachmentName, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {att.name || `Attachment ${i + 1}`}
                       </Text>
-                      <Ionicons name="chevron-forward" size={14} color="#9CA3AF" />
+                      <Ionicons name="download-outline" size={18} color={colors.primary} />
                     </TouchableOpacity>
                   ))}
                 </View>
               )}
             </View>
 
-            <View style={{ height: insets.bottom + 20 }} />
+            <View style={{ height: insets.bottom + 40 }} />
           </ScrollView>
         </View>
       </Modal>
     );
   };
 
-  // ── Filter Modal ───────────────────────────────────────────────────────────
-  const FilterModal = () => (
-    <Modal
-      visible={showFilters}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={() => setShowFilters(false)}
-    >
-      <View style={styles.filterModalOverlay}>
-        <View style={styles.filterModalContent}>
-          <View style={styles.filterModalHeader}>
-            <Text style={styles.filterModalTitle}>Filter & Sort</Text>
-            <TouchableOpacity
-              onPress={() => setShowFilters(false)}
-              style={styles.filterModalClose}
-            >
-              <Ionicons name="close" size={24} color="#6B7280" />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView showsVerticalScrollIndicator={false}>
-            <View style={styles.filterSection}>
-              <Text style={styles.filterSectionLabel}>Sort By</Text>
-              <View style={styles.sortRow}>
-                <TouchableOpacity
-                  style={[styles.sortChip, sortBy === "newest" && styles.sortChipActive]}
-                  onPress={() => setSortBy("newest")}
-                >
-                  <Ionicons name="arrow-down" size={16} color={sortBy === "newest" ? "#1E3A8A" : "#6B7280"} />
-                  <Text style={[styles.sortChipText, sortBy === "newest" && styles.sortChipTextActive]}>
-                    Newest First
-                  </Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={[styles.sortChip, sortBy === "oldest" && styles.sortChipActive]}
-                  onPress={() => setSortBy("oldest")}
-                >
-                  <Ionicons name="arrow-up" size={16} color={sortBy === "oldest" ? "#1E3A8A" : "#6B7280"} />
-                  <Text style={[styles.sortChipText, sortBy === "oldest" && styles.sortChipTextActive]}>
-                    Oldest First
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.filterSection}>
-              <Text style={styles.filterSectionLabel}>Category</Text>
-              <View style={styles.categoryGrid}>
-                {categories.map((cat) => (
-                  <TouchableOpacity
-                    key={cat.id}
-                    style={[
-                      styles.categoryChip,
-                      categoryFilter === cat.id && styles.categoryChipActive,
-                    ]}
-                    onPress={() => setCategoryFilter(cat.id)}
-                  >
-                    <Ionicons name={cat.icon} size={16} color={categoryFilter === cat.id ? "#1E3A8A" : "#6B7280"} />
-                    <Text
-                      style={[
-                        styles.categoryChipText,
-                        categoryFilter === cat.id && styles.categoryChipTextActive,
-                      ]}
-                    >
-                      {cat.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          </ScrollView>
-
-          <View style={styles.filterActions}>
-            <TouchableOpacity
-              style={styles.filterResetButton}
-              onPress={resetFilters}
-            >
-              <Ionicons name="refresh-outline" size={18} color="#DC2626" />
-              <Text style={styles.filterResetButtonText}>Reset All</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={styles.filterApplyButton}
-              onPress={applyFilters}
-            >
-              <Text style={styles.filterApplyButtonText}>Apply Filters</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <View style={{ height: insets.bottom }} />
-        </View>
-      </View>
-    </Modal>
-  );
-
-  // ── Main Render ───────────────────────────────────────────────────────────
   return (
-    <View style={styles.container}>
+    <View style={[styles.pageContainer, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <View>
-          <Text style={styles.headerEyebrow}>Zimbabwe Republic Police</Text>
-          <Text style={styles.headerTitle}>News & Press</Text>
-        </View>
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.headerIcon}
-            onPress={() => setShowFilters(true)}
-          >
-            <Ionicons name="options-outline" size={20} color="#FFFFFF" />
-            {(categoryFilter !== "all" || sortBy !== "newest") && (
-              <View style={styles.activeFilterDot} />
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
+      <AppHeader
+        title="News & Press Hub"
+        subtitle="ZRP Command Official Communications"
+      />
+
+      {!isOnline && <OfflineBanner />}
 
       {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBar}>
-          <Ionicons name="search-outline" size={18} color="#9CA3AF" />
+      <View style={[styles.searchSection, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <View style={[styles.searchBar, { backgroundColor: colors.sectionBg, borderColor: colors.border }]}>
+          <Ionicons name="search-outline" size={20} color={colors.textMuted} style={{ marginRight: 10 }} />
           <TextInput
-            style={styles.searchInput}
-            placeholder="Search articles..."
-            placeholderTextColor="#9CA3AF"
+            style={[styles.searchInput, { color: colors.textPrimary }]}
+            placeholder="Search headlines, notices..."
+            placeholderTextColor={colors.textMuted}
             value={search}
             onChangeText={setSearch}
+            onSubmitEditing={handleSearchSubmit}
             returnKeyType="search"
           />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch("")}>
-              <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+          {search ? (
+            <TouchableOpacity onPress={() => { setSearch(""); fetchNews(1, true); }}>
+              <Ionicons name="close-circle" size={20} color={colors.textMuted} />
             </TouchableOpacity>
-          )}
+          ) : null}
         </View>
       </View>
 
-      {/* Active Filters */}
-      {(categoryFilter !== "all" || search) && (
-        <View style={styles.activeFilters}>
-          <Text style={styles.activeFiltersLabel}>Active filters:</Text>
-          <View style={styles.filterChips}>
-            {categoryFilter !== "all" && (
-              <View style={styles.filterChip}>
-                <Text style={styles.filterChipText}>
-                  {categories.find(c => c.id === categoryFilter)?.label}
+      {/* Category Pills Header */}
+      <View style={[styles.pillsContainer, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.pillsScroll}
+        >
+          {CATEGORIES.map((cat) => {
+            const isActive = activeCategory === cat.key;
+            return (
+              <TouchableOpacity
+                key={cat.key}
+                style={[
+                  styles.pill,
+                  { backgroundColor: colors.sectionBg, borderColor: colors.border },
+                  isActive && { backgroundColor: colors.primary, borderColor: colors.primary },
+                ]}
+                onPress={() => setActiveCategory(cat.key)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.pillText, { color: colors.textSecondary }, isActive && { color: "#FFFFFF", fontWeight: "700" }]}>
+                  {cat.label}
                 </Text>
-                <TouchableOpacity onPress={() => setCategoryFilter("all")}>
-                  <Ionicons name="close" size={14} color="#1E3A8A" />
-                </TouchableOpacity>
-              </View>
-            )}
-            {search && (
-              <View style={styles.filterChip}>
-                <Text style={styles.filterChipText}>Search: {search}</Text>
-                <TouchableOpacity onPress={() => setSearch("")}>
-                  <Ionicons name="close" size={14} color="#1E3A8A" />
-                </TouchableOpacity>
-              </View>
-            )}
-            <TouchableOpacity
-              style={styles.clearAllChip}
-              onPress={resetFilters}
-            >
-              <Text style={styles.clearAllText}>Clear all</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      {/* News List */}
-      {loading ? (
-        <ScrollView showsVerticalScrollIndicator={false} style={styles.skeletonContainer}>
-          {Array.from({ length: 4 }).map((_, i) => (
-            <View key={i} style={styles.skeletonCard}>
-              <View style={styles.skeletonImage} />
-              <View style={styles.skeletonContent}>
-                <View style={styles.skeletonRow}>
-                  <View style={[styles.skeletonPill, { width: 80 }]} />
-                  <View style={[styles.skeletonLine, { width: 60 }]} />
-                </View>
-                <View style={[styles.skeletonLine, { width: "90%", height: 18, marginTop: 8 }]} />
-                <View style={[styles.skeletonLine, { width: "70%", height: 14, marginTop: 6 }]} />
-                <View style={[styles.skeletonLine, { width: "50%", height: 12, marginTop: 8 }]} />
-              </View>
-            </View>
-          ))}
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
+      </View>
+
+      {/* Publications Content List */}
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.textMuted }]}>
+            Fetching verified communications...
+          </Text>
+        </View>
+      ) : news.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Image source={ZRP_LOGO} style={styles.emptyLogo} />
+          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No Publications Found</Text>
+          <Text style={[styles.emptySub, { color: colors.textMuted }]}>
+            {search ? "No headlines match your search query." : "Try switching category filters above."}
+          </Text>
+        </View>
       ) : (
         <FlatList
-          data={filteredNews}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <NewsCard item={item} />}
-          contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
+          data={news}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderNewsCard}
+          contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 80 }]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={["#1E3A8A"]}
-              tintColor="#1E3A8A"
+              colors={[colors.primary]}
+              tintColor={colors.primary}
             />
           }
           onEndReached={loadMore}
           onEndReachedThreshold={0.3}
-          ListHeaderComponent={
-            filteredNews.length > 0 && !loading ? (
-              <View style={styles.resultsHeader}>
-                <Text style={styles.resultsText}>
-                  {filteredNews.length} {filteredNews.length === 1 ? "article" : "articles"}
-                  {search && ` matching "${search}"`}
-                </Text>
-              </View>
-            ) : null
-          }
           ListFooterComponent={
             loadingMore ? (
-              <View style={styles.loadingMore}>
-                <ActivityIndicator size="small" color="#1E3A8A" />
-                <Text style={styles.loadingMoreText}>Loading more...</Text>
+              <View style={{ paddingVertical: 16, alignItems: "center" }}>
+                <ActivityIndicator color={colors.primary} />
               </View>
             ) : null
-          }
-          ListEmptyComponent={
-            !loading && (
-              <View style={styles.emptyState}>
-                <View style={styles.emptyIcon}>
-                  <Ionicons name="newspaper-outline" size={48} color="#D1D5DB" />
-                </View>
-                <Text style={styles.emptyTitle}>No articles found</Text>
-                <Text style={styles.emptySubtitle}>
-                  {search || categoryFilter !== "all"
-                    ? "Try adjusting your search or filters"
-                    : "Check back later for updates"}
-                </Text>
-                {(search || categoryFilter !== "all") && (
-                  <TouchableOpacity
-                    style={styles.clearFiltersButton}
-                    onPress={resetFilters}
-                  >
-                    <Text style={styles.clearFiltersButtonText}>Clear Filters</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )
           }
         />
       )}
 
-      {/* Modals */}
       <ArticleModal />
-      <FilterModal />
     </View>
   );
 };
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: {
+  pageContainer: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
   },
-  header: {
-    backgroundColor: "#1E3A8A",
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-  },
-  headerEyebrow: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.7)",
-    fontWeight: "500",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: "#FFFFFF",
-    marginTop: 4,
-    letterSpacing: -0.5,
-  },
-  headerActions: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 4,
-  },
-  headerIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    justifyContent: "center",
-    alignItems: "center",
-    position: "relative",
-  },
-  activeFilterDot: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#F59E0B",
-    borderWidth: 1,
-    borderColor: "#1E3A8A",
-  },
-  searchContainer: {
-    backgroundColor: "#FFFFFF",
+  searchSection: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
   },
   searchBar: {
+    height: 44,
+    borderRadius: 12,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F9FAFB",
-    borderRadius: 12,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    height: 44,
-    gap: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: 15,
-    color: "#111827",
+    fontSize: 14,
+    paddingVertical: 0,
   },
-  activeFilters: {
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+  pillsContainer: {
+    paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
   },
-  activeFiltersLabel: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: "#6B7280",
-    marginBottom: 8,
-  },
-  filterChips: {
-    flexDirection: "row",
-    flexWrap: "wrap",
+  pillsScroll: {
+    paddingHorizontal: 16,
     gap: 8,
   },
-  filterChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#EFF6FF",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
-    gap: 6,
+  pill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 12,
+    borderWidth: 1,
   },
-  filterChipText: {
+  pillText: {
     fontSize: 12,
-    color: "#1E3A8A",
-    fontWeight: "500",
-  },
-  clearAllChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: "#F3F4F6",
-  },
-  clearAllText: {
-    fontSize: 12,
-    color: "#6B7280",
     fontWeight: "500",
   },
   listContent: {
     padding: 16,
-  },
-  resultsHeader: {
-    marginBottom: 16,
-  },
-  resultsText: {
-    fontSize: 13,
-    color: "#6B7280",
-    fontWeight: "500",
-  },
-  sectionContainer: {
-    marginBottom: 24,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-    paddingHorizontal: 4,
-  },
-  sectionIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#1F2937",
-    marginLeft: 10,
-  },
-  sectionCount: {
-    fontSize: 14,
-    color: "#9CA3AF",
-    marginLeft: 6,
+    gap: 14,
   },
   newsCard: {
-    // backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    marginBottom: 16,
+    borderRadius: 12,
     overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    border: "0px 1px solid #E5E7EB",
+    borderWidth: 1,
   },
   newsImage: {
     width: "100%",
-    height: 200,
-    backgroundColor: "#F3F4F6",
-    // boxShadow: "4px 4px 6px rgba(0,0,0,0.1)",
-    border: "1px solid #E5E7EB",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderTopEndRadius: 16,
-    borderTopStartRadius: 16,
+    height: 165,
   },
   newsContent: {
-    padding: 16,
+    padding: 14,
   },
   newsHeader: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 8,
   },
-  categoryChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 8,
+  categoryBadge: {
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 6,
-    gap: 4,
+    borderRadius: 12,
   },
-  categoryText: {
-    fontSize: 10,
+  categoryBadgeText: {
+    fontSize: 11,
     fontWeight: "700",
-    letterSpacing: 0.5,
   },
   newsDate: {
-    fontSize: 11,
-    color: "#9CA3AF",
+    fontSize: 12,
   },
   newsTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#111827",
-    lineHeight: 22,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   newsExcerpt: {
     fontSize: 13,
-    color: "#6B7280",
     lineHeight: 18,
     marginBottom: 12,
   },
   newsFooter: {
     flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 10,
+    borderTopWidth: 1,
+  },
+  readMoreLink: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  viewsTag: {
+    flexDirection: "row",
     alignItems: "center",
     gap: 4,
   },
-  readMoreLink: {
+  viewsText: {
     fontSize: 12,
-    fontWeight: "600",
   },
-  skeletonContainer: {
-    padding: 16,
-  },
-  skeletonCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    marginBottom: 16,
-    overflow: "hidden",
-  },
-  skeletonImage: {
-    width: "100%",
-    height: 200,
-    backgroundColor: "#E5E7EB",
-  },
-  skeletonContent: {
-    padding: 16,
-  },
-  skeletonRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  skeletonPill: {
-    height: 20,
-    backgroundColor: "#E5E7EB",
-    borderRadius: 10,
-  },
-  skeletonLine: {
-    backgroundColor: "#E5E7EB",
-    borderRadius: 4,
-  },
-  loadingMore: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 20,
-    gap: 8,
-  },
-  loadingMoreText: {
-    fontSize: 13,
-    color: "#9CA3AF",
-  },
-  emptyState: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 60,
-    paddingHorizontal: 32,
-  },
-  emptyIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "#F3F4F6",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#374151",
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: "#9CA3AF",
-    textAlign: "center",
-    marginBottom: 24,
-  },
-  clearFiltersButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: "#EFF6FF",
-    borderRadius: 10,
-  },
-  clearFiltersButtonText: {
-    fontSize: 14,
-    color: "#1E3A8A",
-    fontWeight: "600",
-  },
-  // Modal Styles
   modalContainer: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
   },
-  modalHeader: {
+  modalHeaderBar: {
+    height: 56,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingBottom: 12,
-    backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
   },
   modalCloseButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: "#F3F4F6",
-    justifyContent: "center",
     alignItems: "center",
-  },
-  modalShareButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#F3F4F6",
     justifyContent: "center",
-    alignItems: "center",
   },
   modalHeaderTitle: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#1F2937",
+    fontSize: 16,
+    fontWeight: "700",
   },
   modalImage: {
     width: "100%",
-    height: 250,
-    backgroundColor: "#F3F4F6",
+    height: 230,
   },
   modalContent: {
-    padding: 20,
+    padding: 16,
   },
-  modalMeta: {
+  modalMetaRow: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  modalCategoryBadge: {
-    flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    gap: 6,
-  },
-  modalCategoryText: {
-    fontSize: 12,
-    fontWeight: "600",
-    letterSpacing: 0.5,
+    marginBottom: 12,
   },
   modalDate: {
     fontSize: 12,
-    color: "#9CA3AF",
   },
   modalTitle: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#111827",
-    lineHeight: 32,
+    fontSize: 20,
+    fontWeight: "800",
+    marginBottom: 14,
+    lineHeight: 26,
+  },
+  modalSummaryBox: {
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderLeftWidth: 4,
     marginBottom: 16,
   },
-  modalDescription: {
-    fontSize: 15,
-    color: "#374151",
-    lineHeight: 24,
-    marginBottom: 24,
-  },
-  linksSection: {
-    marginBottom: 24,
-  },
-  linksTitle: {
-    fontSize: 16,
+  modalSummaryText: {
+    fontSize: 13,
     fontWeight: "600",
-    color: "#111827",
-    marginBottom: 12,
+    lineHeight: 19,
   },
-  linkItem: {
+  modalDescription: {
+    fontSize: 14,
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  attachmentsSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+  },
+  attachmentsHeader: {
+    fontSize: 15,
+    fontWeight: "700",
+    marginBottom: 10,
+  },
+  attachmentCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F3F4F6",
     padding: 12,
-    borderRadius: 10,
+    borderRadius: 12,
+    borderWidth: 1,
     marginBottom: 8,
     gap: 10,
   },
-  linkText: {
+  attachmentName: {
     flex: 1,
     fontSize: 13,
-    color: "#3B82F6",
-  },
-  // Filter Modal Styles
-  filterModalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
-  },
-  filterModalContent: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: "80%",
-  },
-  filterModalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
-  },
-  filterModalTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#111827",
-  },
-  filterModalClose: {
-    padding: 4,
-  },
-  filterSection: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F9FAFB",
-  },
-  filterSectionLabel: {
-    fontSize: 14,
     fontWeight: "600",
-    color: "#374151",
-    marginBottom: 12,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
   },
-  sortRow: {
-    flexDirection: "row",
-    gap: 12,
+  loadingContainer: {
+    padding: 60,
+    alignItems: "center",
   },
-  sortChip: {
-    flex: 1,
-    flexDirection: "row",
+  loadingText: {
+    marginTop: 12,
+    fontSize: 13,
+  },
+  emptyContainer: {
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    paddingVertical: 12,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: "#E5E7EB",
-  },
-  sortChipActive: {
-    backgroundColor: "#EFF6FF",
-    borderColor: "#1E3A8A",
-  },
-  sortChipText: {
-    fontSize: 13,
-    color: "#6B7280",
-    fontWeight: "500",
-  },
-  sortChipTextActive: {
-    color: "#1E3A8A",
-    fontWeight: "600",
-  },
-  categoryGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  categoryChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: "#E5E7EB",
-    gap: 6,
-  },
-  categoryChipActive: {
-    backgroundColor: "#EFF6FF",
-    borderColor: "#1E3A8A",
-  },
-  categoryChipText: {
-    fontSize: 13,
-    color: "#6B7280",
-    fontWeight: "500",
-  },
-  categoryChipTextActive: {
-    color: "#1E3A8A",
-    fontWeight: "600",
-  },
-  filterActions: {
-    flexDirection: "row",
+    paddingVertical: 60,
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    gap: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#F3F4F6",
   },
-  filterResetButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: "#FEF2F2",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#FEE2E2",
+  emptyLogo: {
+    width: 60,
+    height: 60,
+    marginBottom: 16,
+    opacity: 0.8,
   },
-  filterResetButtonText: {
-    fontSize: 14,
-    color: "#DC2626",
-    fontWeight: "600",
-  },
-  filterApplyButton: {
-    flex: 1,
-    paddingVertical: 12,
-    backgroundColor: "#1E3A8A",
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  filterApplyButtonText: {
-    fontSize: 14,
-    color: "#FFFFFF",
+  emptyTitle: {
+    fontSize: 17,
     fontWeight: "700",
+    marginBottom: 6,
+  },
+  emptySub: {
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 19,
   },
 });
 

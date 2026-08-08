@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,20 +9,31 @@ import {
   Linking,
   Alert,
   TextInput,
+  StyleSheet,
+  ImageBackground,
 } from "react-native";
-import React, { useState } from "react";
 import { Stack, useRouter } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import '../global.css'
+import analyticsService from "../../src/services/analyticsService";
+import AppHeader from "../../src/components/AppHeader";
+import { colors, radius, spacing, typography, componentHeights, borders } from "../../src/constants/theme";
+import { useAppTheme } from "../../src/context/ThemeContext";
+
+const PATTERN_BG = require("../../assets/images/fallback.png");
 
 const Services = () => {
   const router = useRouter();
+  const { colors: themeColors, isDark } = useAppTheme();
   const [showComingSoonModal, setShowComingSoonModal] = useState(false);
   const [comingSoonTitle, setComingSoonTitle] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [filterByAvailability, setFilterByAvailability] = useState("all");
+
+  useEffect(() => {
+    analyticsService.trackFeature("Public Services");
+  }, []);
 
   // Social media links for ZRP (updated X from Twitter)
   const socialMediaLinks = [
@@ -274,120 +286,111 @@ const Services = () => {
   const renderServiceItem = (service, category) => (
     <TouchableOpacity
       key={service.id}
-      className={`flex-row items-center justify-between px-4 py-3.5 border-b border-gray-200 ${!service.available && 'opacity-60'}`}
+      style={[
+        styles.serviceRowItem,
+        { backgroundColor: themeColors.surface, borderBottomColor: themeColors.border },
+        !service.available && { opacity: 0.6 },
+      ]}
       onPress={() => handleServicePress(service)}
       activeOpacity={0.7}
       disabled={!service.available}
     >
-      <View className="flex-row items-center flex-1">
+      <View style={styles.serviceItemLeft}>
         <View 
-          className="w-9 h-9 rounded-lg justify-center items-center mr-3"
-          style={{ backgroundColor: service.available ? `${category.color}15` : '#E5E7EB' }}
+          style={[
+            styles.serviceIconBadge,
+            { backgroundColor: service.available ? `${category.color}15` : themeColors.sectionBg, borderRadius: 7 },
+          ]}
         >
-          {renderIcon(service.icon, service.available ? category.color : '#9CA3AF', 20)}
+          {renderIcon(service.icon, service.available ? (isDark ? themeColors.primary : category.color) : themeColors.textMuted, 20)}
         </View>
-        <View className="flex-1">
-          <Text className={`text-sm font-semibold ${!service.available ? 'text-gray-500' : 'text-gray-900'}`}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.serviceTitleText, { color: themeColors.textPrimary }]}>
             {service.title}
           </Text>
-          <Text className={`text-xs ${!service.available ? 'text-gray-400' : 'text-gray-600'}`}>
+          <Text style={[styles.serviceSubText, { color: themeColors.textSecondary }]}>
             {service.description}
           </Text>
         </View>
       </View>
-      {service.badge && (
-        <View 
-          className={`px-2 py-1 rounded mr-2 ${service.badge === "CRITICAL" ? 'bg-red-600' : 'bg-blue-900'}`}
-        >
-          <Text className="text-xs font-bold text-white">{service.badge}</Text>
-        </View>
-      )}
       {!service.available && (
-        <View className="px-2 py-1 rounded mr-2 bg-gray-100 border border-gray-200">
-          <Text className="text-xs font-semibold text-gray-500">SOON</Text>
+        <View style={[styles.soonTag, { backgroundColor: themeColors.sectionBg, borderColor: themeColors.border }]}>
+          <Text style={[styles.soonTagText, { color: themeColors.textMuted }]}>SOON</Text>
         </View>
       )}
-      <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+      <Ionicons name="chevron-forward" size={16} color={themeColors.textMuted} />
     </TouchableOpacity>
   );
 
   const renderCategory = (category) => (
-    <View key={category.id} className="mb-5">
-      <View className="flex-row items-center mb-3">
+    <View key={category.id} style={{ marginBottom: 20 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8, paddingHorizontal: 4 }}>
         <View 
-          className="w-8 h-8 rounded-lg justify-center items-center mr-2"
-          style={{ backgroundColor: `${category.color}15` }}
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 12,
+            justifyContent: "center",
+            alignItems: "center",
+            marginRight: 8,
+            backgroundColor: isDark ? themeColors.sectionBg : `${category.color}15`,
+          }}
         >
-          {renderIcon(category.icon, category.color, 18)}
+          {renderIcon(category.icon, isDark ? themeColors.primary : category.color, 16)}
         </View>
-        <Text className="text-base font-semibold text-gray-700">{category.title}</Text>
-        <Text className="text-sm text-gray-500 ml-1">({category.services.length})</Text>
+        <Text style={{ fontSize: 14, fontWeight: "700", color: themeColors.primary }}>{category.title}</Text>
+        <Text style={{ fontSize: 12, color: themeColors.textMuted, marginLeft: 4 }}>({category.services.length})</Text>
       </View>
-      <View className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
-        {category.services.map(service => renderServiceItem(service, category))}
+      <View style={{ backgroundColor: themeColors.surface, borderRadius: 12, borderWidth: 1, borderColor: themeColors.border, overflow: "hidden" }}>
+        <ImageBackground source={PATTERN_BG} imageStyle={{ opacity: 0.04, resizeMode: "cover" }}>
+          {category.services.map(service => renderServiceItem(service, category))}
+        </ImageBackground>
       </View>
     </View>
   );
 
   return (
-    <View className="flex-1 bg-gray-50">
-      <StatusBar barStyle="light-content" backgroundColor="#1E3A8A" />
+    <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
       <Stack.Screen options={{ headerShown: false }} />
       
-      {/* Header */}
-      <View className="bg-blue-900 pt-12 pb-4 px-4">
-        <View className="flex-row items-center justify-between">
-          <TouchableOpacity 
-            className="w-10 h-10 rounded-full bg-white/20 justify-center items-center"
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-          <Text className="text-lg font-semibold text-white">Services</Text>
-          <TouchableOpacity 
-            className="w-10 h-10 rounded-full bg-white/20 justify-center items-center"
-            onPress={() => setShowSearch(!showSearch)}
-          >
-            <Ionicons name="search" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-      </View>
+      {/* App Bar (64dp) */}
+      <AppHeader
+        title="Public Services"
+        subtitle="ZRP Digital Services Directory"
+        rightActions={[
+          {
+            iconName: "search-outline",
+            onPress: () => setShowSearch(!showSearch),
+          },
+        ]}
+      />
 
-      {/* Search Bar */}
+      {/* Search Bar (56dp) */}
       {showSearch && (
-        <View className="flex-row items-center px-4 py-3 bg-white border-b border-gray-200">
-          <View className="flex-1 flex-row items-center bg-gray-50 rounded-lg px-3 h-10 border border-gray-200 mr-3">
-            <Ionicons name="search" size={18} color="#6b7280" className="mr-2" />
+        <View style={{ paddingHorizontal: spacing.screenPadding, paddingVertical: spacing.component, backgroundColor: colors.neutral.white, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+          <View style={{ height: componentHeights.search, borderRadius: radius.input, backgroundColor: colors.sectionBg, flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.cardSpacing, borderWidth: 1, borderColor: colors.border }}>
+            <Ionicons name="search" size={20} color={colors.neutral[500]} style={{ marginRight: 10 }} />
             <TextInput
-              className="flex-1 text-sm text-gray-900"
+              style={{ flex: 1, ...typography.body, color: colors.textPrimary, paddingVertical: 0 }}
               placeholder="Search services..."
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor={colors.neutral[400]}
               value={searchQuery}
               onChangeText={setSearchQuery}
               autoFocus={true}
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity onPress={() => setSearchQuery("")}>
-                <Ionicons name="close-circle" size={18} color="#9ca3af" />
+                <Ionicons name="close-circle" size={20} color={colors.neutral[400]} />
               </TouchableOpacity>
             )}
           </View>
-          <TouchableOpacity 
-            className="px-3"
-            onPress={() => {
-              setShowSearch(false);
-              setSearchQuery("");
-            }}
-          >
-            <Text className="text-sm font-medium text-blue-900">Cancel</Text>
-          </TouchableOpacity>
         </View>
       )}
 
       {/* Filters Section - Inline */}
       <View className="bg-white border-b border-gray-200">
         <View className="px-4 pt-3">
-          <Text className="text-sm font-semibold text-gray-700 mb-2">Filter Services</Text>
+          <Text className="text-sm font-bold text-blue-900 mb-2">Filter Services</Text>
           
           {/* Category Filters */}
           <ScrollView 
@@ -501,7 +504,7 @@ const Services = () => {
         {filteredCategories.length > 0 ? (
           <View className="mt-1">
             <View className="bg-white px-4 py-4 border-b border-gray-200">
-              <Text className="text-base font-semibold text-gray-900">
+              <Text className="text-base font-bold text-blue-900">
                 {searchQuery ? "Search Results" : "All Services"}
               </Text>
             </View>
@@ -537,7 +540,7 @@ const Services = () => {
 
         {/* Follow Us Section */}
         <View className="bg-white mt-2 px-4 py-5 border-b border-gray-200">
-          <Text className="text-base font-semibold text-gray-900 mb-4">Follow ZRP</Text>
+          <Text className="text-base font-bold text-blue-900 mb-4">Follow ZRP</Text>
           <View className="flex-row justify-center">
             {socialMediaLinks.map((social) => (
               <TouchableOpacity
@@ -560,7 +563,7 @@ const Services = () => {
 
         {/* Quick Links */}
         <View className="bg-white mt-2 px-4 py-5">
-          <Text className="text-base font-semibold text-gray-900 mb-4">Quick Links</Text>
+          <Text className="text-base font-bold text-blue-900 mb-4">Quick Links</Text>
           <View className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
             {[
               { icon: "call", label: "Emergency Contacts", route: "/emergency-contacts" },
@@ -619,5 +622,48 @@ const Services = () => {
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  serviceRowItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  serviceItemLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  serviceIconBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 7,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  serviceTitleText: {
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  serviceSubText: {
+    fontSize: 12,
+  },
+  soonTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 7,
+    borderWidth: 1,
+    marginRight: 8,
+  },
+  soonTagText: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
+});
 
 export default Services;
