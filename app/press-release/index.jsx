@@ -11,8 +11,12 @@ import {
   ScrollView,
   Dimensions,
   Image,
+  Animated,
+  PanResponder,
+  SafeAreaView,
+  StatusBar,
 } from "react-native";
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Stack, useRouter } from "expo-router";
 import pb from "../../lib/connection";
 import { Ionicons } from "@expo/vector-icons";
@@ -20,13 +24,34 @@ import { useNavigation } from "@react-navigation/native";
 
 const { width } = Dimensions.get("window");
 const PAGE_SIZE = 10;
+const FILTER_DRAWER_HEIGHT = 500;
 
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1588681664899-f142ff2dc9b1?w=800&q=80";
 
 const News = () => {
   const navigation = useNavigation();
-    const router = useRouter();
+  const router = useRouter();
+
+  // Animation refs
+  const filterSheetAnim = useRef(new Animated.Value(FILTER_DRAWER_HEIGHT)).current;
+  const filterOverlayAnim = useRef(new Animated.Value(0)).current;
   
+  // Pan responder for filter drawer
+  const filterPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 10,
+      onPanResponderMove: (_, g) => {
+        if (g.dy > 0) filterSheetAnim.setValue(Math.min(g.dy, FILTER_DRAWER_HEIGHT));
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 100 || g.vy > 0.5) closeFilters();
+        else openFilters();
+      },
+    })
+  ).current;
+  
+  // State
   const [news, setNews] = useState([]);
   const [filteredNews, setFilteredNews] = useState([]);
   const [search, setSearch] = useState("");
@@ -41,6 +66,40 @@ const News = () => {
   const [totalItems, setTotalItems] = useState(0);
   const [selectedDate, setSelectedDate] = useState(null);
   const [showSearch, setShowSearch] = useState(false);
+
+  // Filter drawer animations
+  const openFilters = () => {
+    setShowFilters(true);
+    Animated.parallel([
+      Animated.spring(filterSheetAnim, {
+        toValue: 0,
+        tension: 50,
+        friction: 12,
+        useNativeDriver: true,
+      }),
+      Animated.timing(filterOverlayAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const closeFilters = () => {
+    Animated.parallel([
+      Animated.spring(filterSheetAnim, {
+        toValue: FILTER_DRAWER_HEIGHT,
+        tension: 50,
+        friction: 12,
+        useNativeDriver: true,
+      }),
+      Animated.timing(filterOverlayAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => setShowFilters(false));
+  };
 
   const categories = [
     { id: "all", label: "All" },
@@ -217,82 +276,116 @@ const News = () => {
   };
 
   const renderFilterModal = () => (
-    <Modal
-      visible={showFilters}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={() => setShowFilters(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Filter</Text>
-            <TouchableOpacity onPress={() => setShowFilters(false)}>
-              <Ionicons name="close" size={22} color="#374151" />
-            </TouchableOpacity>
-          </View>
-          
-          <View style={styles.modalSection}>
-            <Text style={styles.sectionLabel}>Sort By</Text>
-            <View style={styles.sortOptions}>
-              <TouchableOpacity
-                style={[styles.sortOption, sortBy === "newest" && styles.sortOptionActive]}
-                onPress={() => setSortBy("newest")}
-              >
-                <Text style={[styles.sortOptionText, sortBy === "newest" && styles.sortOptionTextActive]}>
-                  Newest First
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.sortOption, sortBy === "oldest" && styles.sortOptionActive]}
-                onPress={() => setSortBy("oldest")}
-              >
-                <Text style={[styles.sortOptionText, sortBy === "oldest" && styles.sortOptionTextActive]}>
-                  Oldest First
-                </Text>
-              </TouchableOpacity>
-            </View>
+    showFilters ? (
+      <>
+        {/* Overlay */}
+        <Animated.View
+          style={[
+            styles.filterOverlay,
+            {
+              opacity: filterOverlayAnim,
+            },
+          ]}
+          pointerEvents={showFilters ? "auto" : "none"}
+        >
+          <TouchableOpacity
+            style={styles.filterOverlayTouch}
+            onPress={closeFilters}
+            activeOpacity={1}
+          />
+        </Animated.View>
+
+        {/* Filter Drawer */}
+        <Animated.View
+          style={[
+            styles.filterSheet,
+            {
+              transform: [{ translateY: filterSheetAnim }],
+            },
+          ]}
+          {...filterPanResponder.panHandlers}
+        >
+          <View style={styles.sheetHandle}>
+            <View style={styles.sheetHandleBar} />
           </View>
 
-          <View style={styles.modalSection}>
-            <Text style={styles.sectionLabel}>Categories</Text>
-            <View style={styles.categoryGrid}>
-              {categories.map((cat) => (
+          <ScrollView 
+            showsVerticalScrollIndicator={false}
+            style={styles.filterContent}
+            scrollEventThrottle={16}
+          >
+            <View style={styles.filterHeader}>
+              <Text style={styles.filterTitle}>Filter & Sort</Text>
+              <TouchableOpacity onPress={closeFilters}>
+                <Ionicons name="close" size={22} color="#374151" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Sort Section */}
+            <View style={styles.filterSection}>
+              <Text style={styles.sectionLabel}>Sort By</Text>
+              <View style={styles.sortOptions}>
                 <TouchableOpacity
-                  key={cat.id}
-                  style={[styles.categoryButton, categoryFilter === cat.id && styles.categoryButtonActive]}
-                  onPress={() => setCategoryFilter(cat.id)}
+                  style={[styles.sortOption, sortBy === "newest" && styles.sortOptionActive]}
+                  onPress={() => setSortBy("newest")}
                 >
-                  <Text style={[styles.categoryButtonText, categoryFilter === cat.id && styles.categoryButtonTextActive]}>
-                    {cat.label}
+                  <Text style={[styles.sortOptionText, sortBy === "newest" && styles.sortOptionTextActive]}>
+                    Newest First
                   </Text>
                 </TouchableOpacity>
-              ))}
+                <TouchableOpacity
+                  style={[styles.sortOption, sortBy === "oldest" && styles.sortOptionActive]}
+                  onPress={() => setSortBy("oldest")}
+                >
+                  <Text style={[styles.sortOptionText, sortBy === "oldest" && styles.sortOptionTextActive]}>
+                    Oldest First
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
 
-          <View style={styles.modalActions}>
-            <TouchableOpacity
-              style={styles.resetButton}
-              onPress={() => {
-                setSortBy("newest");
-                setCategoryFilter("all");
-                setSelectedDate(null);
-                setSearch("");
-              }}
-            >
-              <Text style={styles.resetButtonText}>Reset</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.applyButton}
-              onPress={() => setShowFilters(false)}
-            >
-              <Text style={styles.applyButtonText}>Apply</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
+            {/* Categories Section */}
+            <View style={styles.filterSection}>
+              <Text style={styles.sectionLabel}>Categories</Text>
+              <View style={styles.categoryGrid}>
+                {categories.map((cat) => (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={[styles.categoryButton, categoryFilter === cat.id && styles.categoryButtonActive]}
+                    onPress={() => setCategoryFilter(cat.id)}
+                  >
+                    <Text style={[styles.categoryButtonText, categoryFilter === cat.id && styles.categoryButtonTextActive]}>
+                      {cat.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Actions */}
+            <View style={styles.filterActions}>
+              <TouchableOpacity
+                style={styles.resetButton}
+                onPress={() => {
+                  setSortBy("newest");
+                  setCategoryFilter("all");
+                  setSelectedDate(null);
+                  setSearch("");
+                }}
+              >
+                <Text style={styles.resetButtonText}>Reset</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.applyButton}
+                onPress={closeFilters}
+              >
+                <Text style={styles.applyButtonText}>Apply</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </Animated.View>
+      </>
+    ) : null
   );
 
   const renderSearchBar = () => {
@@ -412,12 +505,12 @@ const News = () => {
       {/* Floating Filter Button */}
       <TouchableOpacity 
         style={styles.floatingFilterButton}
-        onPress={() => setShowFilters(true)}
+        onPress={openFilters}
       >
         <Ionicons name="filter" size={22} color="#FFFFFF" />
       </TouchableOpacity>
 
-      {/* Filter Modal */}
+      {/* Filter Drawer */}
       {renderFilterModal()}
     </View>
   );
@@ -428,7 +521,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#f8fafc",
   },
-  // Header from EmergencyContacts
+  // Header
   header: {
     backgroundColor: "#1E3A8A",
     paddingTop: 50,
@@ -459,6 +552,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  // Search
   searchContainer: {
     padding: 16,
     backgroundColor: "#fff",
@@ -469,7 +563,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#f7fafc",
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: "#e2e8f0",
@@ -484,6 +578,7 @@ const styles = StyleSheet.create({
     color: "#2d3748",
     paddingVertical: 8,
   },
+  // Loading
   loadingContainer: {
     padding: 16,
   },
@@ -504,72 +599,88 @@ const styles = StyleSheet.create({
     backgroundColor: "#e5e7eb",
     borderRadius: 3,
   },
+  // News List
   listContainer: {
     paddingBottom: 100,
   },
   newsItem: {
     backgroundColor: "#ffffff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    marginHorizontal: 12,
+    marginVertical: 8,
+    borderRadius: 12,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   itemContent: {
     flexDirection: "row",
     padding: 16,
-    paddingBottom: 12,
+    gap: 12,
   },
   textContent: {
     flex: 1,
-    marginRight: 12,
   },
   itemHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 8,
+    gap: 8,
   },
   category: {
-    fontSize: 12,
-    color: "#1E3A8A",
-    fontWeight: "600",
+    fontSize: 11,
+    color: "#FFFFFF",
+    fontWeight: "700",
     textTransform: "uppercase",
+    backgroundColor: "#1E3A8A",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 4,
+    alignSelf: "flex-start",
   },
   date: {
     fontSize: 12,
-    color: "#6b7280",
+    color: "#64748b",
+    fontWeight: "500",
   },
   title: {
     fontSize: 15,
-    fontWeight: "600",
-    color: "#111827",
+    fontWeight: "700",
+    color: "#0f172a",
     lineHeight: 20,
     marginBottom: 6,
   },
   excerpt: {
     fontSize: 13,
-    color: "#6b7280",
+    color: "#64748b",
     lineHeight: 18,
   },
   itemImage: {
-    width: 70,
-    height: 70,
-    borderRadius: 5,
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    backgroundColor: "#e2e8f0",
   },
   itemFooter: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",
     paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingBottom: 12,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: "#f3f4f6",
+    borderTopColor: "#f1f5f9",
   },
   readMore: {
     fontSize: 13,
     color: "#1E3A8A",
     marginRight: 4,
-    fontWeight: "500",
+    fontWeight: "600",
   },
+  // Floating Button
   floatingFilterButton: {
     position: "absolute",
     bottom: 30,
@@ -580,12 +691,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#1E3A8A",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowColor: "#1E3A8A",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
+  // Loading More
   footerLoader: {
     flexDirection: "row",
     justifyContent: "center",
@@ -597,6 +709,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6b7280",
   },
+  // Empty State
   emptyState: {
     alignItems: "center",
     justifyContent: "center",
@@ -629,42 +742,68 @@ const styles = StyleSheet.create({
     color: "#1E3A8A",
     fontWeight: "600",
   },
-  modalOverlay: {
+  // Filter Drawer Styles
+  filterOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    zIndex: 40,
+  },
+  filterOverlayTouch: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
   },
-  modalContent: {
+  filterSheet: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: FILTER_DRAWER_HEIGHT,
     backgroundColor: "#ffffff",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    paddingBottom: 20,
-    maxHeight: "80%",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    zIndex: 50,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  modalHeader: {
+  sheetHandle: {
+    alignItems: "center",
+    paddingVertical: 12,
+  },
+  sheetHandleBar: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#cbd5e0",
+  },
+  filterContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  filterHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#e5e7eb",
+    marginBottom: 12,
   },
-  modalTitle: {
+  filterTitle: {
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: "700",
     color: "#111827",
   },
-  modalSection: {
-    paddingHorizontal: 20,
+  filterSection: {
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#f3f4f6",
   },
   sectionLabel: {
     fontSize: 14,
-    fontWeight: "600",
-    color: "#374151",
+    fontWeight: "700",
+    color: "#1f2937",
     marginBottom: 12,
   },
   sortOptions: {
@@ -677,7 +816,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f9fafb",
     borderRadius: 8,
     alignItems: "center",
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: "#e5e7eb",
   },
   sortOptionActive: {
@@ -687,11 +826,11 @@ const styles = StyleSheet.create({
   sortOptionText: {
     fontSize: 14,
     color: "#6b7280",
-    fontWeight: "500",
+    fontWeight: "600",
   },
   sortOptionTextActive: {
     color: "#1E3A8A",
-    fontWeight: "600",
+    fontWeight: "700",
   },
   categoryGrid: {
     flexDirection: "row",
@@ -699,11 +838,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   categoryButton: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     backgroundColor: "#f9fafb",
     borderRadius: 8,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: "#e5e7eb",
   },
   categoryButtonActive: {
@@ -711,19 +850,19 @@ const styles = StyleSheet.create({
     borderColor: "#1E3A8A",
   },
   categoryButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#6b7280",
-    fontWeight: "500",
+    fontWeight: "600",
   },
   categoryButtonTextActive: {
     color: "#1E3A8A",
-    fontWeight: "600",
+    fontWeight: "700",
   },
-  modalActions: {
+  filterActions: {
     flexDirection: "row",
-    paddingHorizontal: 20,
-    paddingTop: 20,
     gap: 12,
+    paddingVertical: 20,
+    paddingBottom: 30,
   },
   resetButton: {
     flex: 1,
@@ -731,11 +870,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#fef2f2",
     borderRadius: 8,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#fecaca",
   },
   resetButtonText: {
     fontSize: 16,
     color: "#dc2626",
-    fontWeight: "600",
+    fontWeight: "700",
   },
   applyButton: {
     flex: 1,
@@ -743,11 +884,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#1E3A8A",
     borderRadius: 8,
     alignItems: "center",
+    shadowColor: "#1E3A8A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   applyButtonText: {
     fontSize: 16,
     color: "#ffffff",
-    fontWeight: "600",
+    fontWeight: "700",
   },
 });
 
