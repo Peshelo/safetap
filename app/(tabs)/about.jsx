@@ -9,14 +9,17 @@ import {
   Image,
   Linking,
 } from "react-native";
-import { MaterialIcons, Ionicons, Feather } from "@expo/vector-icons";
+import { Ionicons } from "../components/Icons";
 import * as SecureStore from "expo-secure-store";
 import { TextInput } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import CustomHeader from "../components/Header";
 
 const About = () => {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   // Social media links for Zimbabwe Republic Police
   const socialMediaLinks = [
@@ -25,7 +28,7 @@ const About = () => {
       name: "Facebook",
       icon: "logo-facebook",
       color: "#1877F2",
-      url: "https://www.facebook.com/ZimbabweRepublicPolice",
+      url: "https://www.facebook.com/p/Zimbabwe-Republic-Police-zrp-100088691142271/",
       username: "@ZimbabweRepublicPolice",
     },
     {
@@ -47,41 +50,37 @@ const About = () => {
   // App info section
   const appInfoSection = [
     {
+      title: "Getting Started",
+      icon: "rocket-outline",
+      color: "#8E8E93",
+      onPress: () => router.push("/onboarding"),
+    },
+    {
       title: "Privacy Policy",
       icon: "policy",
       color: "#8E8E93",
-      onPress: () => Linking.openURL("https://zrp.gov.zw/safetap-privacy-policy"),
+      onPress: () => router.push("/privacy-policy"),
     },
     {
-      title: "Terms of Service",
+      title: "Terms & Conditions",
       icon: "description",
       color: "#8E8E93",
-      onPress: () => Linking.openURL("https://zrp.gov.zw/safetap-terms-of-service"),
+      onPress: () => router.push("/terms-and-conditions"),
     },
     {
       title: "Help & Support",
       icon: "help",
       color: "#8E8E93",
-      onPress: () => Linking.openURL("mailto:support@zrp.gov.zw"),
+      onPress: () => Linking.openURL("mailto:support@zrp.co.zw"),
     },
   ];
 
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-      <StatusBar barStyle="light-content" backgroundColor="#1E3A8A" />
+      <StatusBar style="light" backgroundColor="#1E3A8A" />
 
-      {/* Header matching other pages */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>About</Text>
-        <View style={styles.headerRight} />
-      </View>
+      <CustomHeader title="About SafeTap" subtitle="Zimbabwe Republic Police" showLogo compact />
 
       <ScrollView 
         style={styles.scrollView}
@@ -175,7 +174,7 @@ const About = () => {
               onPress={item.onPress}
             >
               <View style={[styles.listIcon, { backgroundColor: "#F3F4F6" }]}>
-                <MaterialIcons name={item.icon} size={20} color="#6B7280" />
+                <Ionicons name={item.icon} size={20} color="#6B7280" />
               </View>
               <Text style={styles.listText}>{item.title}</Text>
               <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
@@ -185,7 +184,7 @@ const About = () => {
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>© 2026 Zimbabwe Republic Police</Text>
+          <Text style={styles.footerText}>© {new Date().getFullYear()} Zimbabwe Republic Police</Text>
           <Text style={styles.footerSubtext}>www.zrp.gov.zw</Text>
         </View>
         
@@ -204,7 +203,7 @@ const styles = StyleSheet.create({
   // Header matching other pages
   header: {
     backgroundColor: "#1E3A8A",
-    paddingTop: 50,
+    paddingTop: 12,
     paddingBottom: 16,
     paddingHorizontal: 16,
     flexDirection: "row",

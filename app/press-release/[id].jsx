@@ -10,14 +10,16 @@ import {
   StyleSheet,
   Linking,
   Modal,
-  SafeAreaView,
 } from "react-native";
 import React, { useEffect, useState } from "react";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "../components/Icons";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system";
-import pb from "../../lib/connection";
+import api from "../../lib/connection";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
+import ArticleImage, { FALLBACK_IMAGE } from "../components/ArticleImage";
 
 const { width } = Dimensions.get("window");
 
@@ -38,14 +40,14 @@ export default function NewsDetails() {
 
   const fetchArticle = async () => {
     try {
-      const record = await pb.collection("news").getOne(id);
+      const record = await api.collection("news").getOne(id);
       setArticle(record);
 
       const processed = [];
 
       if (record.file) {
-        const url = pb.files.getURL(record, record.file);
-        const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(record.file);
+        const url = api.files.getURL(record, record.file);
+        const isImage = Boolean(record.cover_image_url) || /\.(jpg|jpeg|png|gif|webp|bmp)(?:\?|$)/i.test(record.file);
 
         processed.push({
           type: isImage ? "image" : "document",
@@ -56,7 +58,7 @@ export default function NewsDetails() {
 
       if (Array.isArray(record.attachments)) {
         record.attachments.forEach((name) => {
-          const url = pb.files.getURL(record, name);
+          const url = api.files.getURL(record, name);
           const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(name);
 
           processed.push({
@@ -98,10 +100,13 @@ export default function NewsDetails() {
 
   const images = attachments.filter((a) => a.type === "image");
   const documents = attachments.filter((a) => a.type === "document");
+  const publishedDate = article?.created ? new Date(article.created) : null;
+  const hasValidPublishedDate = publishedDate && !Number.isNaN(publishedDate.getTime());
 
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
+        <StatusBar style="dark" backgroundColor="#FFFFFF" />
         <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#1E3A8A" />
@@ -113,6 +118,7 @@ export default function NewsDetails() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar style="dark" backgroundColor="#FFFFFF" />
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* Header */}
@@ -142,40 +148,46 @@ export default function NewsDetails() {
           <View style={styles.metaItem}>
             <Ionicons name="calendar-outline" size={14} color="#64748b" />
             <Text style={styles.metaText}>
-              {new Date(article.created).toLocaleDateString("en-US", { 
+              {hasValidPublishedDate ? publishedDate.toLocaleDateString("en-US", { 
                 year: "numeric", 
                 month: "short", 
                 day: "numeric" 
-              })}
+              }) : "Date unavailable"}
             </Text>
           </View>
           <View style={styles.metaDivider} />
           <View style={styles.metaItem}>
             <Ionicons name="time-outline" size={14} color="#64748b" />
             <Text style={styles.metaText}>
-              {new Date(article.created).toLocaleTimeString("en-US", { 
+              {hasValidPublishedDate ? publishedDate.toLocaleTimeString("en-US", { 
                 hour: "2-digit", 
                 minute: "2-digit" 
-              })}
+              }) : "Time unavailable"}
             </Text>
           </View>
         </View>
 
         {/* Main Image */}
-        {images[0] && (
-          <TouchableOpacity 
-            onPress={() => {
-              setSelectedImage(images[0].url);
-              setImageViewerVisible(true);
-            }}
-            style={styles.mainImageContainer}
-          >
-            <Image source={{ uri: images[0].url }} style={styles.mainImage} resizeMode="cover" />
+        <TouchableOpacity 
+          disabled={!images[0]}
+          onPress={() => {
+            if (!images[0]) return;
+            setSelectedImage(images[0].url);
+            setImageViewerVisible(true);
+          }}
+          style={styles.mainImageContainer}
+        >
+          <ArticleImage
+            source={images[0] ? { uri: images[0].url } : FALLBACK_IMAGE}
+            style={styles.mainImage}
+            resizeMode="cover"
+          />
+          {images[0] && (
             <View style={styles.imageOverlay}>
               <Ionicons name="expand-outline" size={24} color="white" />
             </View>
-          </TouchableOpacity>
-        )}
+          )}
+        </TouchableOpacity>
 
         {/* Description */}
         {article.description && (
@@ -236,7 +248,7 @@ export default function NewsDetails() {
                 activeOpacity={0.7}
               >
                 <View style={styles.documentIcon}>
-                  <MaterialIcons name="insert-drive-file" size={20} color="#1E3A8A" />
+                  <Ionicons name="insert-drive-file" size={20} color="#1E3A8A" />
                 </View>
                 <View style={styles.documentInfo}>
                   <Text style={styles.documentName} numberOfLines={1}>

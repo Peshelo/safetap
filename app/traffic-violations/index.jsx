@@ -14,14 +14,16 @@ import {
 } from "react-native";
 import React, { useState, useEffect } from "react";
 import { router, Stack } from "expo-router";
-import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
-import pb from "../../lib/connection";
+import { Ionicons } from "../components/Icons";
+import api from "../../lib/connection";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import CustomHeader from "../components/Header";
 import { useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const TrafficViolations = () => {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -30,15 +32,21 @@ const TrafficViolations = () => {
   const [hasSearched, setHasSearched] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const PAGE_SIZE = 20;
 
   // Fetch all traffic violations on component mount (optional - for admin view)
   const fetchAllViolations = async () => {
     try {
       setLoading(true);
-      const records = await pb.collection("traffic_violations").getFullList({
+      const records = await api.collection("traffic_violations").getList(1, PAGE_SIZE, {
         sort: "-created",
       });
-      setViolations(records);
+      setViolations(records.items);
+      setCurrentPage(1);
+      setHasMore(records.page < records.totalPages);
     } catch (err) {
       setError("Failed to fetch traffic violations");
       console.error(err);
@@ -60,18 +68,38 @@ const TrafficViolations = () => {
       setError(null);
 
       // Search for violations with the specific licence number
-      const records = await pb.collection("traffic_violations").getFullList({
+      const records = await api.collection("traffic_violations").getList(1, PAGE_SIZE, {
         filter: `licence_number = "${licenceNumber.trim()}"`,
         sort: "-created",
       });
 
-      setViolations(records);
+      setViolations(records.items);
+      setCurrentPage(1);
+      setHasMore(records.page < records.totalPages);
       setHasSearched(true);
     } catch (err) {
       setError("Failed to search for violations");
       console.error(err);
     } finally {
       setSearchLoading(false);
+    }
+  };
+
+  const loadMoreViolations = async () => {
+    if (!hasMore || loadingMore) return;
+    try {
+      setLoadingMore(true);
+      const nextPage = currentPage + 1;
+      const options = { sort: "-created" };
+      if (hasSearched && licenceNumber.trim()) options.filter = `licence_number = "${licenceNumber.trim()}"`;
+      const result = await api.collection("traffic_violations").getList(nextPage, PAGE_SIZE, options);
+      setViolations((current) => [...current, ...result.items.filter((item) => !current.some((existing) => existing.id === item.id))]);
+      setCurrentPage(nextPage);
+      setHasMore(result.page < result.totalPages);
+    } catch (err) {
+      setError("Failed to load more traffic violations");
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -167,7 +195,7 @@ const TrafficViolations = () => {
               syncing && customStyles.syncButtonDisabled,
             ]}
           >
-            <MaterialIcons
+            <Ionicons
               name="sync"
               size={20}
               color={syncing ? "#94a3b8" : "#fff"}
@@ -185,7 +213,7 @@ const TrafficViolations = () => {
   const renderGuidanceSection = () => (
     <View className="bg-blue-50 rounded-xl p-4 mb-6">
       <View className="flex-row items-center mb-3">
-        <FontAwesome5 name="info-circle" size={20} color="#2563eb" />
+        <Ionicons name="info-circle" size={20} color="#2563eb" />
         <Text className="text-lg font-semibold text-blue-900 ml-2">
           What to do if you have violations
         </Text>
@@ -226,7 +254,7 @@ const TrafficViolations = () => {
       </View>
 
       <TouchableOpacity
-        onPress={() => router.push("(tabs)/contacts")}
+        onPress={() => router.push("/(tabs)/contacts")}
         className="bg-blue-600 rounded-lg py-3 px-4 mt-4"
       >
         <Text className="text-white text-center font-medium">
@@ -252,9 +280,7 @@ const TrafficViolations = () => {
   };
 
   return (
-    <GestureHandlerRootView className="flex-1 bg-gray-50">
-      <StatusBar barStyle={"dark-content"} backgroundColor={"#fff"} />
-
+    <GestureHandlerRootView className="flex-1 bg-gray-50" style={{ paddingBottom: insets.bottom }}>
       <Stack.Screen
         options={{
           headerShown: false, 
@@ -317,7 +343,7 @@ const TrafficViolations = () => {
                 {searchLoading ? (
                   <ActivityIndicator size="small" color="white" />
                 ) : (
-                  <FontAwesome5 name="search" size={16} color="white" />
+                  <Ionicons name="search" size={16} color="white" />
                 )}
               </TouchableOpacity>
             </View>
@@ -349,7 +375,7 @@ const TrafficViolations = () => {
                 </View>
               ) : violations.length === 0 ? (
                 <View className="bg-green-50 p-6 rounded-lg items-center">
-                  <FontAwesome5 name="check-circle" size={32} color="#10b981" />
+                  <Ionicons name="check-circle" size={32} color="#10b981" />
                   <Text className="text-green-800 font-semibold mt-2 mb-1">
                     No Violations Found
                   </Text>
@@ -364,6 +390,11 @@ const TrafficViolations = () => {
                   renderItem={renderViolationItem}
                   keyExtractor={(item) => item.id}
                   scrollEnabled={false}
+                  ListFooterComponent={hasMore ? (
+                    <TouchableOpacity className="py-3 items-center" onPress={loadMoreViolations} disabled={loadingMore}>
+                      {loadingMore ? <ActivityIndicator color="#1E3A8A" /> : <Text className="text-blue-900 font-semibold">Load more</Text>}
+                    </TouchableOpacity>
+                  ) : null}
                 />
               )}
             </View>
@@ -375,7 +406,7 @@ const TrafficViolations = () => {
           {/* Emergency Contact Section */}
           <View className="bg-orange-50 rounded-xl p-4">
             <View className="flex-row items-center mb-3">
-              <FontAwesome5 name="phone" size={18} color="#ea580c" />
+              <Ionicons name="phone" size={18} color="#ea580c" />
               <Text className="text-lg font-semibold text-orange-900 ml-2">
                 Need Help?
               </Text>

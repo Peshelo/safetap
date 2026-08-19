@@ -14,11 +14,14 @@ import {
 } from "react-native";
 import React, { useState, useEffect } from "react";
 import { router } from "expo-router";
-import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
-import pb from "../../lib/connection";
+import { Ionicons } from "../components/Icons";
+import api from "../../lib/connection";
 import * as Location from "expo-location";
 import * as SecureStore from "expo-secure-store";
 import { StatusBar } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import CustomHeader from "../components/Header";
+import ArticleImage, { FALLBACK_IMAGE } from "../components/ArticleImage";
 
 const { width } = Dimensions.get("window");
 
@@ -37,7 +40,18 @@ const COLORS = {
   border: "#E2E8F0",
 };
 
+const formatArticleDate = (value) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Date unavailable";
+  return date.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
 const Home = () => {
+  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
   const [newsArticles, setNewsArticles] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -50,8 +64,8 @@ const Home = () => {
   const fetchNewsArticles = async () => {
     try {
       setLoading(true);
-      const records = await pb.collection("news").getFullList({ sort: "-created" });
-      setNewsArticles(records);
+      const records = await api.collection("news").getList(1, 4, { sort: "-created" });
+      setNewsArticles(records.items);
     } catch (err) {
       console.error(err);
     } finally {
@@ -93,7 +107,7 @@ const Home = () => {
       title: "Press Release",
       subtitle: "Latest news & press releases",
       icon: "newspaper",
-      action: () => router.push("/press-release"),
+      action: () => router.push("/(tabs)/news"),
     },
     {
       title: "Suggestion Box",
@@ -109,7 +123,7 @@ const Home = () => {
       description: "Browse all police services",
       icon: "search",
       available: true,
-      action: () => router.push("/services"),
+      action: () => router.push("/(tabs)/services"),
     },
     {
       title: "Report Follow-up",
@@ -130,7 +144,7 @@ const Home = () => {
       description: "Learn about SafeTap",
       icon: "info-circle",
       available: true,
-      action: () => router.push("/about"),
+      action: () => router.push("/(tabs)/about"),
     },
   ];
 
@@ -141,13 +155,6 @@ const Home = () => {
       number: "+263242703631",
       icon: "shield-alt",
       bgColor: COLORS.red,
-    },
-    {
-      title: "Child Protection",
-      subtitle: "Toll Free Helpline",
-      number: "+263242703631",
-      icon: "child",
-      bgColor: "#6B21A8",
     },
   ];
 
@@ -173,28 +180,17 @@ const Home = () => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.navy} />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.logoContainer}>
-            <Image
-              source={require("../../assets/images/logo-alternate.png")}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-          </View>
-          <View>
-            <Text style={styles.appName}>SafeTap</Text>
-            <Text style={styles.appSubtitle}>Zimbabwe Republic Police</Text>
-          </View>
-        </View>
-        <TouchableOpacity
-          onPress={() => router.push("(tabs)/about")}
-          style={styles.profileButton}
-        >
-          <Ionicons name="settings" size={18} color={COLORS.navy} />
-        </TouchableOpacity>
-      </View>
+      <CustomHeader
+        title="SafeTap"
+        subtitle="Zimbabwe Republic Police"
+        showLogo
+        compact
+        rightComponent={(
+          <TouchableOpacity onPress={() => router.push("/(tabs)/about")} style={styles.profileButton}>
+            <Ionicons name="settings" size={18} color={COLORS.navy} />
+          </TouchableOpacity>
+        )}
+      />
 
       <ScrollView
         style={styles.scrollView}
@@ -211,7 +207,7 @@ const Home = () => {
       >
         {/* Notice Banner */}
         <View style={styles.noticeBanner}>
-          <FontAwesome5 name="bullhorn" size={13} color={COLORS.navy} style={{ marginRight: 8, marginTop: 1 }} />
+          <Ionicons name="bullhorn" size={13} color={COLORS.navy} style={{ marginRight: 8, marginTop: 1 }} />
           <Text style={styles.noticeText} numberOfLines={2}>{noticeBanner}</Text>
         </View>
 
@@ -219,7 +215,7 @@ const Home = () => {
         <View style={styles.stationRow}>
           {/* Directory */}
           <TouchableOpacity
-            onPress={() => router.push("(tabs)/contacts")}
+            onPress={() => router.push("/(tabs)/contacts")}
             style={styles.stationCardWrapper}
             activeOpacity={0.88}
           >
@@ -230,7 +226,7 @@ const Home = () => {
             >
               <View style={styles.stationOverlayNavy}>
                 <View style={styles.stationIconCircle}>
-                  <FontAwesome5 name="building" size={20} color={COLORS.white} />
+                  <Ionicons name="building" size={20} color={COLORS.white} />
                 </View>
                 <Text style={styles.stationCardTitle}>Police Station Directory</Text>
                 <Text style={styles.stationCardSub}>Browse all stations with contact information</Text>
@@ -251,7 +247,7 @@ const Home = () => {
             >
               <View style={styles.stationOverlayYellow}>
                 <View style={[styles.stationIconCircle, { backgroundColor: "rgba(0,0,0,0.18)" }]}>
-                  <FontAwesome5 name="map-marked-alt" size={20} color={COLORS.navy} />
+                  <Ionicons name="map-marked-alt" size={20} color={COLORS.navy} />
                 </View>
                 <Text style={[styles.stationCardTitle, { color: COLORS.navy }]}>Live Station Locator</Text>
                 <Text style={[styles.stationCardSub, { color: "rgba(15,23,42,0.75)" }]}>Find nearest stations with directions & distance</Text>
@@ -264,10 +260,10 @@ const Home = () => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
-              <FontAwesome5 name="phone-alt" size={13} color={COLORS.red} />
+              <Ionicons name="phone-alt" size={13} color={COLORS.red} />
               <Text style={styles.sectionTitle}>Emergency Contacts</Text>
             </View>
-            <TouchableOpacity onPress={() => router.push("/contacts")}>
+            <TouchableOpacity onPress={() => router.push("/(tabs)/contacts")}>
               <Text style={styles.viewAll}>All Contacts</Text>
             </TouchableOpacity>
           </View>
@@ -282,12 +278,12 @@ const Home = () => {
                 activeOpacity={0.88}
               >
                 <View style={styles.emergencyIconWrap}>
-                  <FontAwesome5 name={contact.icon} size={16} color={COLORS.white} />
+                  <Ionicons name={contact.icon} size={16} color={COLORS.white} />
                 </View>
                 <Text style={styles.emergencyTitle}>{contact.title}</Text>
                 <Text style={styles.emergencySubtitle}>{contact.subtitle}</Text>
                 <View style={[styles.callBadge, { backgroundColor: "rgba(255,255,255,0.25)" }]}>
-                  <FontAwesome5 name="phone-alt" size={10} color={COLORS.white} />
+                  <Ionicons name="phone-alt" size={10} color={COLORS.white} />
                 </View>
               </TouchableOpacity>
             ))}
@@ -306,7 +302,7 @@ const Home = () => {
               activeOpacity={0.88}
             >
               <View style={styles.whatsappIconWrap}>
-                <FontAwesome5 name="whatsapp" size={22} color={COLORS.white} />
+                <Ionicons name="whatsapp" size={22} color={COLORS.white} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.whatsappTitle}>Chat on WhatsApp</Text>
@@ -331,7 +327,7 @@ const Home = () => {
                 activeOpacity={0.88}
               >
                 <View style={styles.quickActionIcon}>
-                  <FontAwesome5 name={item.icon} size={17} color={COLORS.navy} />
+                  <Ionicons name={item.icon} size={17} color={COLORS.navy} />
                 </View>
                 <Text style={styles.quickActionTitle}>{item.title}</Text>
                 <Text style={styles.quickActionSub}>{item.subtitle}</Text>
@@ -346,10 +342,10 @@ const Home = () => {
         <View style={styles.newsSection}>
           <View style={[styles.sectionHeader, { paddingHorizontal: 16 }]}>
             <View style={styles.sectionTitleRow}>
-              <FontAwesome5 name="newspaper" size={13} color={COLORS.yellow} />
+              <Ionicons name="newspaper" size={13} color={COLORS.yellow} />
               <Text style={styles.sectionTitle}>News & Press Releases</Text>
             </View>
-            <TouchableOpacity onPress={() => router.push("/press-release")}>
+            <TouchableOpacity onPress={() => router.push("/(tabs)/news")}>
               <Text style={styles.viewAll}>View All</Text>
             </TouchableOpacity>
           </View>
@@ -369,18 +365,17 @@ const Home = () => {
                   style={styles.newsCard}
                   activeOpacity={0.88}
                 >
-                  <Image
+                  <ArticleImage
                     source={
                       item.file
-                        ? { uri: pb.files.getURL(item, item.file) }
-                        : require("../../assets/images/fallback.png")
+                        ? { uri: api.files.getURL(item, item.file) }
+                        : FALLBACK_IMAGE
                     }
                     style={styles.newsImage}
-                    defaultSource={require("../../assets/images/fallback.png")}
                   />
                   <View style={styles.newsContent}>
                     <Text style={styles.newsDate}>
-                      {new Date(item.created).toLocaleDateString("en-GB")}
+                      {formatArticleDate(item.created)}
                     </Text>
                     <Text style={styles.newsTitle} numberOfLines={2}>{item.title}</Text>
                     {item.description && (
@@ -403,10 +398,10 @@ const Home = () => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
-              <FontAwesome5 name="tasks" size={13} color={COLORS.navy} />
+              <Ionicons name="tasks" size={13} color={COLORS.navy} />
               <Text style={styles.sectionTitle}>Police Services</Text>
             </View>
-            <TouchableOpacity onPress={() => router.push("/services")}>
+            <TouchableOpacity onPress={() => router.push("/(tabs)/services")}>
               <Text style={styles.viewAll}>View All</Text>
             </TouchableOpacity>
           </View>
@@ -425,7 +420,7 @@ const Home = () => {
                 disabled={!service.available}
               >
                 <View style={styles.serviceIconWrap}>
-                  <FontAwesome5 name={service.icon} size={14} color={service.available ? COLORS.navy : COLORS.textLight} />
+                  <Ionicons name={service.icon} size={14} color={service.available ? COLORS.navy : COLORS.textLight} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.serviceTitle}>{service.title}</Text>
@@ -445,7 +440,7 @@ const Home = () => {
 
         {/* Footer */}
         <View style={styles.footer}>
-          <FontAwesome5 name="shield-alt" size={16} color={COLORS.navy} />
+          <Ionicons name="shield-alt" size={16} color={COLORS.navy} />
           <Text style={styles.footerText}>
             Your safety is our priority. Always know your nearest police station.
           </Text>
@@ -482,7 +477,7 @@ const styles = StyleSheet.create({
   // Header
   header: {
     backgroundColor: COLORS.navy,
-    paddingTop: 52,
+    paddingTop: 12,
     paddingBottom: 12,
     paddingHorizontal: 16,
     flexDirection: "row",

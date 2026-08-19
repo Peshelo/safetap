@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, Vibration, Image, StatusBar } from 'react-native';
 import { Stack } from 'expo-router';
 import * as Location from 'expo-location';
-import pb from '../../lib/connection';
+import api from '../../lib/connection';
 import { get } from 'react-native/Libraries/TurboModule/TurboModuleRegistry';
 // import call from 'react-native-phone-call';
 
@@ -64,7 +64,7 @@ const SOSPage = () => {
           formData.append("priority", "red");
           // formData.append("user", userId);
 
-    pb.collection('cases').create(formData).then(() => {
+    api.collection('cases').create(formData).then(() => {
       Alert.alert('SOS Sent!', `Emergency services have been alerted. Your location: ${userLocation}`);
     }).catch((error) => {
       Alert.alert('Error', 'Unable to send SOS alert.' + error);

@@ -1,12 +1,13 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import pb from "../../lib/connection";
+import api from "../../lib/connection";
+import ArticleImage, { FALLBACK_IMAGE } from "./ArticleImage";
 
 const NewsSummaryCard = ({ item, onPress, showDescription = true }) => {
   const getFileUrl = (item) => {
     if (!item.file) return null;
-    return pb.files.getURL(item, item.file);
+    return api.files.getURL(item, item.file);
   };
 
   const fileUrl = getFileUrl(item);
@@ -14,19 +15,22 @@ const NewsSummaryCard = ({ item, onPress, showDescription = true }) => {
   const formatDate = (dateString) => {
     if (!dateString) return "";
     const date = new Date(dateString);
-    return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
+    if (Number.isNaN(date.getTime())) return "Date unavailable";
+    return date.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
   };
 
   // Fallback image source
-  const fallbackImage = require("../../assets/images/fallback.png");
 
   return (
     <TouchableOpacity style={styles.card} onPress={() => onPress?.(item)} activeOpacity={0.8}>
       <View style={styles.imageContainer}>
-        <Image 
-          source={fileUrl ? { uri: fileUrl } : fallbackImage} 
+        <ArticleImage 
+          source={fileUrl ? { uri: fileUrl } : FALLBACK_IMAGE} 
           style={styles.image}
-          defaultSource={fallbackImage}
         />
       </View>
       

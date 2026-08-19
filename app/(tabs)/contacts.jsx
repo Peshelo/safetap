@@ -14,14 +14,15 @@ import {
   RefreshControl,
   Platform,
 } from "react-native";
-import { FontAwesome5, Ionicons, MaterialIcons } from "@expo/vector-icons";
-import pb from "../../lib/connection";
+import { Ionicons } from "../components/Icons";
+import api from "../../lib/connection";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Stack, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import useNetworkStatus from "../hooks/useNetworkStatus";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import CustomHeader from "../components/Header";
 
 const { width } = Dimensions.get("window");
 
@@ -150,7 +151,7 @@ const EmergencyContacts = () => {
     try {
       setSavingAll(true);
       // Fetch every record (no pagination limit)
-      const all = await pb.collection("contacts").getFullList({ sort: "station" });
+      const all = await api.collection("contacts").getFullList({ sort: "station" });
       await saveToCache(all);
       Alert.alert(
         "Saved Offline",
@@ -195,7 +196,7 @@ const EmergencyContacts = () => {
           if (province)     filters.push(`province="${province}"`);
           if (district)     filters.push(`district="${district.toUpperCase()}"`);
 
-          resultList = await pb.collection("contacts").getList(1, PAGE_SIZE, {
+          resultList = await api.collection("contacts").getList(1, PAGE_SIZE, {
             sort: "station",
             ...(filters.length > 0 && { filter: filters.join(" && ") }),
           });
@@ -240,17 +241,32 @@ const EmergencyContacts = () => {
       const nextPage = currentPage + 1;
 
       if (hasActiveFilters) {
-        const { _all = [] } = await buildResultFromCache(searchTerm, selectedProvince, selectedDistrict);
-        const more = _all.slice(currentPage * PAGE_SIZE, nextPage * PAGE_SIZE);
-        const next = [...displayedContacts, ...more];
-        setDisplayedContacts(next);
-        setCurrentPage(nextPage);
-        setHasMore(next.length < _all.length);
+        if (isOnline && !usingCachedData) {
+          const filters = [];
+          if (searchTerm) filters.push(`(station~"${searchTerm}" || member_in_charge~"${searchTerm}" || specialty~"${searchTerm}")`);
+          if (selectedProvince) filters.push(`province="${selectedProvince}"`);
+          if (selectedDistrict) filters.push(`district="${selectedDistrict.toUpperCase()}"`);
+          const result = await api.collection("contacts").getList(nextPage, PAGE_SIZE, {
+            sort: "station",
+            ...(filters.length > 0 && { filter: filters.join(" && ") }),
+          });
+          const next = [...displayedContacts, ...result.items.filter((item) => !displayedContacts.some((existing) => existing.id === item.id))];
+          setDisplayedContacts(next);
+          setCurrentPage(nextPage);
+          setHasMore(result.page < result.totalPages);
+        } else {
+          const { _all = [] } = await buildResultFromCache(searchTerm, selectedProvince, selectedDistrict);
+          const more = _all.slice(currentPage * PAGE_SIZE, nextPage * PAGE_SIZE);
+          const next = [...displayedContacts, ...more];
+          setDisplayedContacts(next);
+          setCurrentPage(nextPage);
+          setHasMore(next.length < _all.length);
+        }
       } else {
         let resultList;
         if (isOnline && !usingCachedData) {
           try {
-            resultList = await pb.collection("contacts").getList(nextPage, PAGE_SIZE, { sort: "station" });
+            resultList = await api.collection("contacts").getList(nextPage, PAGE_SIZE, { sort: "station" });
           } catch {
             const cached = await loadFromCache() ?? [];
             resultList = { items: cached.slice((nextPage - 1) * PAGE_SIZE, nextPage * PAGE_SIZE), totalItems: cached.length };
@@ -359,12 +375,8 @@ const EmergencyContacts = () => {
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* ── Header ── */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <View style={styles.headerInner}>
-          <View>
-            <Text style={styles.headerTitle}>Police Stations</Text>
-            <Text style={styles.headerSub}>Zimbabwe Republic Police</Text>
-          </View>
+      <View style={styles.header}>
+        <CustomHeader title="Police Stations" subtitle="Zimbabwe Republic Police" showLogo compact rightComponent={(
           <View style={styles.headerActions}>
             {/* Save all offline */}
             <TouchableOpacity
@@ -382,11 +394,11 @@ const EmergencyContacts = () => {
             {/* Reset filters — only visible when filters are active */}
             {hasActiveFilters && (
               <TouchableOpacity onPress={resetFilters} style={styles.headerBtn}>
-                <MaterialIcons name="filter-list-off" size={20} color="#FFFFFF" />
+                <Ionicons name="filter-list-off" size={20} color="#FFFFFF" />
               </TouchableOpacity>
             )}
           </View>
-        </View>
+        )} />
 
         {/* Search bar lives inside the header */}
         <View style={styles.searchBar}>
@@ -432,7 +444,7 @@ const EmergencyContacts = () => {
             </Text>
           </View>
           <View style={styles.statusItem}>
-            <MaterialIcons
+            <Ionicons
               name={usingCachedData ? "cached" : "cloud-done"}
               size={13}
               color="#1E3A8A"
@@ -457,7 +469,7 @@ const EmergencyContacts = () => {
             <View style={styles.filtersHeader}>
               <Text style={styles.filtersTitle}>Filter Stations</Text>
               <TouchableOpacity onPress={resetFilters} style={styles.resetBtn}>
-                <MaterialIcons name="refresh" size={16} color="#1E3A8A" />
+                <Ionicons name="refresh" size={16} color="#1E3A8A" />
                 <Text style={styles.resetBtnText}>Reset</Text>
               </TouchableOpacity>
             </View>
@@ -563,7 +575,6 @@ const styles = StyleSheet.create({
   // ── Header ──────────────────────────────────────────────────────────────────
   header: {
     backgroundColor: "#1E3A8A",
-    paddingHorizontal: 16,
     paddingBottom: 14,
   },
   headerInner: {
@@ -604,6 +615,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 12,
     height: 44,
+    marginHorizontal: 16,
   },
   searchInput: {
     flex: 1,

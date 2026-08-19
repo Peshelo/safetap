@@ -6,7 +6,7 @@ import {
   View,
 } from "react-native";
 import React, { Component, useState } from "react";
-import pb from "../../lib/connection";
+import api from "../../lib/connection";
 import { Ionicons } from "@expo/vector-icons";
 import {
   GestureHandlerRootView,
@@ -33,7 +33,7 @@ export default TrackCase = () => {
     setError(null);
 
     try {
-      const record = await pb.collection("cases").getOne(caseId);
+      const record = await api.collection("cases").getOne(caseId);
       setCaseDetails(record);
     } catch (err) {
       setError("Case not found. Please check your ID and try again.");

@@ -6,7 +6,7 @@ const useNetworkStatus = () => {
 
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
-      setIsOnline(state.isConnected && state.isInternetReachable);
+      setIsOnline(Boolean(state.isConnected) && state.isInternetReachable !== false);
     });
 
     return () => unsubscribe();

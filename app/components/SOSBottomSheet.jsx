@@ -12,14 +12,14 @@ import {
   Platform,
   Vibration,
   ScrollView,
-  Modal,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from './Icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import SmoothBottomSheet from './SmoothBottomSheet';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 const SLIDER_WIDTH = width - 60;
 const CIRCLE_SIZE = 70;
 const TRACK_HEIGHT = 80;
@@ -34,8 +34,6 @@ const SOSBottomSheet = ({ visible, onClose, onTriggerSOS }) => {
   const [isSending, setIsSending] = useState(false);
   const [progress, setProgress] = useState(0);
   
-  const sheetHeight = useRef(new Animated.Value(0)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
   const circleScale = useRef(new Animated.Value(1)).current;
   const pulseAnimation = useRef(new Animated.Value(0)).current;
   const progressBarWidth = useRef(new Animated.Value(0)).current;
@@ -51,7 +49,6 @@ const SOSBottomSheet = ({ visible, onClose, onTriggerSOS }) => {
     if (visible) {
       loadSOSHistory();
       checkLocationPermission();
-      animateSheetIn();
       startPulseAnimation();
     } else {
       resetSlider();
@@ -107,40 +104,6 @@ const SOSBottomSheet = ({ visible, onClose, onTriggerSOS }) => {
     if (pulseAnimationRef.current) {
       pulseAnimationRef.current.stop();
     }
-  };
-
-  const animateSheetIn = () => {
-    Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.spring(sheetHeight, {
-        toValue: height * 0.9, // 90% height
-        damping: 20,
-        mass: 0.8,
-        stiffness: 90,
-        useNativeDriver: false,
-      }),
-    ]).start();
-  };
-
-  const animateSheetOut = () => {
-    Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: 150,
-        useNativeDriver: true,
-      }),
-      Animated.timing(sheetHeight, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: false,
-      }),
-    ]).start(() => {
-      onClose();
-    });
   };
 
   const loadSOSHistory = async () => {
@@ -225,6 +188,24 @@ const SOSBottomSheet = ({ visible, onClose, onTriggerSOS }) => {
     try {
       // Final vibration before sending
       Vibration.vibrate([0, 100, 100, 200]);
+
+      const permission = await Location.getForegroundPermissionsAsync();
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (permission.status !== 'granted' || !servicesEnabled) {
+        resetSlider();
+        setIsSending(false);
+        setProgress(0);
+        progressBarWidth.setValue(0);
+        Alert.alert(
+          'Location Unavailable',
+          'SafeTap cannot attach your location. Enable location access, or contact emergency services directly.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ]
+        );
+        return;
+      }
       
       const currentLocation = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
@@ -238,7 +219,7 @@ const SOSBottomSheet = ({ visible, onClose, onTriggerSOS }) => {
       
       // Show success and auto-close after a brief delay
       setTimeout(() => {
-        animateSheetOut();
+        onClose();
         Alert.alert(
           'Emergency SOS Sent',
           'Your location has been sent to emergency services.',
@@ -316,9 +297,9 @@ const SOSBottomSheet = ({ visible, onClose, onTriggerSOS }) => {
 
   const checkLocationPermission = async () => {
     try {
-      const { status } = await Location.getForegroundPermissionsAsync();
+      const permission = await Location.requestForegroundPermissionsAsync();
       
-      if (status !== 'granted') {
+      if (permission.status !== 'granted') {
         setLocationError('Location permission required');
         Alert.alert(
           'Location Required',
@@ -326,19 +307,23 @@ const SOSBottomSheet = ({ visible, onClose, onTriggerSOS }) => {
           [
             {
               text: 'Open Settings',
-              onPress: () => {
-                if (Platform.OS === 'ios') {
-                  Linking.openURL('app-settings:');
-                } else {
-                  Linking.openSettings();
-                }
-              },
+              onPress: () => Linking.openSettings(),
             },
             {
               text: 'Cancel',
               style: 'cancel',
             },
           ]
+        );
+        return;
+      }
+
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (!servicesEnabled) {
+        setLocationError('Device location is turned off');
+        Alert.alert(
+          'Location Services Off',
+          'Turn on device location before sending an SOS. You can close this panel and use emergency calling instead.'
         );
         return;
       }
@@ -381,12 +366,10 @@ const SOSBottomSheet = ({ visible, onClose, onTriggerSOS }) => {
 
   const handleScrollEndDrag = (event) => {
     if (scrollOffset.current < -80 && isDragging.current) {
-      animateSheetOut();
+      onClose();
     }
     isDragging.current = false;
   };
-
-  if (!visible) return null;
 
   const sliderProgress = slideX.interpolate({
     inputRange: [0, SLIDER_WIDTH - CIRCLE_SIZE],
@@ -409,40 +392,11 @@ const SOSBottomSheet = ({ visible, onClose, onTriggerSOS }) => {
   });
 
   return (
-    <Modal
-      transparent={true}
+    <SmoothBottomSheet
       visible={visible}
-      animationType="none"
-      statusBarTranslucent
+      onClose={onClose}
+      contentStyle={styles.bottomSheet}
     >
-      <View style={styles.container}>
-        {/* Overlay */}
-        <Animated.View style={[styles.overlay, { opacity }]}>
-          <TouchableOpacity 
-            style={styles.overlayTouchable}
-            activeOpacity={1}
-            onPress={animateSheetOut}
-          />
-        </Animated.View>
-        
-        {/* Bottom Sheet */}
-        <Animated.View style={[
-          styles.bottomSheet,
-          {
-            height: sheetHeight,
-            transform: [{
-              translateY: sheetHeight.interpolate({
-                inputRange: [0, height * 0.9],
-                outputRange: [height * 0.9, 0]
-              })
-            }]
-          }
-        ]}>
-          {/* iPhone-style pull indicator */}
-          <View style={styles.pullIndicator}>
-            <View style={styles.pullHandle} />
-          </View>
-
           <ScrollView
             ref={scrollViewRef}
             style={styles.scrollView}
@@ -469,7 +423,7 @@ const SOSBottomSheet = ({ visible, onClose, onTriggerSOS }) => {
             {/* Rate Limit Warning */}
             {!canSendSOS && (
               <View style={styles.rateLimitContainer}>
-                <MaterialCommunityIcons name="timer-sand" size={20} color="#DC2626" />
+                <Ionicons name="timer-sand" size={20} color="#DC2626" />
                 <Text style={styles.rateLimitText}>
                   Wait {Math.ceil(countdown / 60)} min before next SOS
                 </Text>
@@ -504,7 +458,7 @@ const SOSBottomSheet = ({ visible, onClose, onTriggerSOS }) => {
             <View style={styles.mapContainer}>
               <View style={styles.mapHeader}>
                 <Text style={styles.mapTitle}>Your Location</Text>
-                <TouchableOpacity onPress={getCurrentLocation}>
+                <TouchableOpacity onPress={checkLocationPermission}>
                   <Ionicons name="refresh" size={18} color="#1E3A8A" />
                 </TouchableOpacity>
               </View>
@@ -675,14 +629,12 @@ const SOSBottomSheet = ({ visible, onClose, onTriggerSOS }) => {
           {/* Cancel Button - iPhone Style */}
           <TouchableOpacity 
             style={styles.cancelButton}
-            onPress={animateSheetOut}
+            onPress={onClose}
             activeOpacity={0.7}
           >
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </TouchableOpacity>
-        </Animated.View>
-      </View>
-    </Modal>
+    </SmoothBottomSheet>
   );
 };
 
@@ -699,30 +651,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bottomSheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    height: '90%',
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 20,
-  },
-  pullIndicator: {
-    alignItems: 'center',
-    paddingTop: 12,
-    paddingBottom: 4,
-  },
-  pullHandle: {
-    width: 40,
-    height: 5,
-    backgroundColor: '#D1D5DB',
-    borderRadius: 2.5,
   },
   scrollView: {
     flex: 1,

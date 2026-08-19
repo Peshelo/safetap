@@ -4,24 +4,23 @@ import {
   TouchableOpacity,
   ScrollView,
   StatusBar,
-  Modal,
   Linking,
   Alert,
   TextInput,
 } from "react-native";
 import React, { useState } from "react";
 import { Stack, useRouter } from "expo-router";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "../components/Icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import CustomHeader from "../components/Header";
 import '../global.css'
 
 const Services = () => {
   const router = useRouter();
-  const [showComingSoonModal, setShowComingSoonModal] = useState(false);
-  const [comingSoonTitle, setComingSoonTitle] = useState("");
+  const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("all");
-  const [filterByAvailability, setFilterByAvailability] = useState("all");
 
   // Social media links for ZRP (updated X from Twitter)
   const socialMediaLinks = [
@@ -30,7 +29,7 @@ const Services = () => {
       name: "Facebook",
       icon: "logo-facebook",
       color: "#1877F2",
-      url: "https://www.facebook.com/ZimbabweRepublicPolice",
+      url: "https://www.facebook.com/p/Zimbabwe-Republic-Police-zrp-100088691142271/",
     },
     {
       id: "x",
@@ -55,7 +54,7 @@ const Services = () => {
           icon: "search",
           description: "Search Police Station Directory",
           available: true,
-          action: () => router.push("(tabs)/contacts"),
+          action: () => router.push("/(tabs)/contacts"),
           badge: "MOST USED",
         },
         {
@@ -128,7 +127,7 @@ const Services = () => {
           icon: "badge",
           description: "Apply for clearance",
           available: false,
-          action: () => router.push("/services/clearance"),
+          action: () => showComingSoon("Police Clearance"),
         },
         {
           id: 11,
@@ -190,10 +189,11 @@ const Services = () => {
     }
   ];
 
-  const showComingSoon = (title) => {
-    setComingSoonTitle(title);
-    setShowComingSoonModal(true);
-  };
+  const availableCategories = serviceCategories.filter((category) =>
+    Array.isArray(category.services) && category.services.some((service) => service.available)
+  );
+
+  const showComingSoon = () => {};
 
   const handleServicePress = (service) => {
     if (service.action) {
@@ -237,7 +237,7 @@ const Services = () => {
       "shield-checkmark": (size, color) => <Ionicons name="shield-checkmark" size={size} color={color} />,
       
       // MaterialCommunityIcons for specific icons
-      sos: (size, color) => <MaterialCommunityIcons name="sos" size={size} color={color} />,
+      sos: (size, color) => <Ionicons name="sos" size={size} color={color} />,
       flame: (size, color) => <Ionicons name="flame" size={size} color={color} />,
     };
 
@@ -257,13 +257,7 @@ const Services = () => {
             service.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
             service.description.toLowerCase().includes(searchQuery.toLowerCase());
           
-          // Availability filter
-          const matchesAvailability = 
-            filterByAvailability === "all" ||
-            (filterByAvailability === "available" && service.available) ||
-            (filterByAvailability === "coming_soon" && !service.available);
-          
-          return matchesSearch && matchesAvailability;
+          return service.available && matchesSearch;
         })
       }))
       .filter(category => category.services.length > 0);
@@ -302,11 +296,6 @@ const Services = () => {
           <Text className="text-xs font-bold text-white">{service.badge}</Text>
         </View>
       )}
-      {!service.available && (
-        <View className="px-2 py-1 rounded mr-2 bg-gray-100 border border-gray-200">
-          <Text className="text-xs font-semibold text-gray-500">SOON</Text>
-        </View>
-      )}
       <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
     </TouchableOpacity>
   );
@@ -334,24 +323,14 @@ const Services = () => {
       <StatusBar barStyle="light-content" backgroundColor="#1E3A8A" />
       <Stack.Screen options={{ headerShown: false }} />
       
-      {/* Header */}
-      <View className="bg-blue-900 pt-12 pb-4 px-4">
-        <View className="flex-row items-center justify-between">
-          <TouchableOpacity 
-            className="w-10 h-10 rounded-full bg-white/20 justify-center items-center"
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-          <Text className="text-lg font-semibold text-white">Services</Text>
+      <CustomHeader title="Services" subtitle="Zimbabwe Republic Police" showLogo compact rightComponent={(
           <TouchableOpacity 
             className="w-10 h-10 rounded-full bg-white/20 justify-center items-center"
             onPress={() => setShowSearch(!showSearch)}
           >
             <Ionicons name="search" size={20} color="#FFFFFF" />
           </TouchableOpacity>
-        </View>
-      </View>
+      )} />
 
       {/* Search Bar */}
       {showSearch && (
@@ -403,7 +382,7 @@ const Services = () => {
                 All
               </Text>
             </TouchableOpacity>
-            {serviceCategories.map((cat) => (
+            {availableCategories.map((cat) => (
               <TouchableOpacity
                 key={cat.id}
                 className={`px-3 py-1.5 rounded-full mr-2 ${selectedCategory === cat.id ? 'bg-blue-50 border border-blue-200' : 'bg-gray-100 border border-gray-200'}`}
@@ -416,52 +395,19 @@ const Services = () => {
             ))}
           </ScrollView>
 
-          {/* Availability Filters */}
-          <View className="flex-row mb-3">
-            {[
-              { key: "all", label: "All Services" },
-              { key: "available", label: "Available Now" },
-              { key: "coming_soon", label: "Coming Soon" },
-            ].map((opt) => (
-              <TouchableOpacity
-                key={opt.key}
-                className={`flex-1 mx-1 px-3 py-2 rounded-lg ${filterByAvailability === opt.key ? 'bg-blue-50 border border-blue-200' : 'bg-gray-100 border border-gray-200'}`}
-                onPress={() => setFilterByAvailability(opt.key)}
-              >
-                <View className="flex-row items-center justify-center">
-                  <Text className={`text-sm ${filterByAvailability === opt.key ? 'text-blue-900 font-semibold' : 'text-gray-600'}`}>
-                    {opt.label}
-                  </Text>
-                  {filterByAvailability === opt.key && (
-                    <Ionicons name="checkmark" size={16} color="#1E3A8A" className="ml-1" />
-                  )}
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
         </View>
 
         {/* Active Filters Display */}
-        {(selectedCategory !== "all" || filterByAvailability !== "all" || searchQuery) && (
+        {(selectedCategory !== "all" || searchQuery) && (
           <View className="px-4 pb-3">
             <Text className="text-xs font-medium text-gray-500 mb-1">Active Filters:</Text>
             <View className="flex-row flex-wrap">
               {selectedCategory !== "all" && (
                 <View className="flex-row items-center bg-blue-100 px-2 py-1 rounded mr-2 mb-1">
                   <Text className="text-xs font-medium text-blue-900 mr-1">
-                    Category: {serviceCategories.find(c => c.id === selectedCategory)?.title}
+                    Category: {availableCategories.find(c => c.id === selectedCategory)?.title}
                   </Text>
                   <TouchableOpacity onPress={() => setSelectedCategory("all")}>
-                    <Ionicons name="close" size={12} color="#1E3A8A" />
-                  </TouchableOpacity>
-                </View>
-              )}
-              {filterByAvailability !== "all" && (
-                <View className="flex-row items-center bg-blue-100 px-2 py-1 rounded mr-2 mb-1">
-                  <Text className="text-xs font-medium text-blue-900 mr-1">
-                    {filterByAvailability === "available" ? "Available Now" : "Coming Soon"}
-                  </Text>
-                  <TouchableOpacity onPress={() => setFilterByAvailability("all")}>
                     <Ionicons name="close" size={12} color="#1E3A8A" />
                   </TouchableOpacity>
                 </View>
@@ -480,7 +426,6 @@ const Services = () => {
                 className="flex-row items-center bg-gray-200 px-2 py-1 rounded mr-2 mb-1"
                 onPress={() => {
                   setSelectedCategory("all");
-                  setFilterByAvailability("all");
                   setSearchQuery("");
                 }}
               >
@@ -516,17 +461,16 @@ const Services = () => {
               No services found
             </Text>
             <Text className="text-sm text-gray-400 text-center mb-4">
-              {searchQuery || selectedCategory !== "all" || filterByAvailability !== "all"
+              {searchQuery || selectedCategory !== "all"
                 ? "Try adjusting your search or filters"
                 : "No services available"}
             </Text>
-            {(searchQuery || selectedCategory !== "all" || filterByAvailability !== "all") && (
+            {(searchQuery || selectedCategory !== "all") && (
               <TouchableOpacity 
                 className="px-5 py-2.5 bg-gray-50 rounded-lg border border-gray-300"
                 onPress={() => {
                   setSearchQuery("");
                   setSelectedCategory("all");
-                  setFilterByAvailability("all");
                 }}
               >
                 <Text className="text-sm font-semibold text-blue-900">Clear Filters</Text>
@@ -563,14 +507,13 @@ const Services = () => {
           <Text className="text-base font-semibold text-gray-900 mb-4">Quick Links</Text>
           <View className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
             {[
-              { icon: "call", label: "Emergency Contacts", route: "/emergency-contacts" },
               { icon: "location", label: "Police Stations Map", route: "/maps" },
-              { icon: "newspaper", label: "Latest News", route: "/press-release" },
-              { icon: "information-circle", label: "About SafeTap", route: "/about" },
+              { icon: "newspaper-outline", label: "Latest News", route: "/(tabs)/news" },
+              { icon: "information-circle-outline", label: "About SafeTap", route: "/(tabs)/about" },
             ].map((link, index) => (
               <TouchableOpacity 
                 key={index}
-                className={`flex-row items-center px-4 py-4 ${index < 3 ? 'border-b border-gray-200' : ''}`}
+                className={`flex-row items-center px-4 py-4 ${index < 2 ? 'border-b border-gray-200' : ''}`}
                 onPress={() => router.push(link.route)}
               >
                 <Ionicons name={link.icon} size={18} color="#1E3A8A" />
@@ -584,38 +527,6 @@ const Services = () => {
         {/* Footer Spacing - Removed extra spacing since paddingBottom handles it */}
       </ScrollView>
 
-      {/* Coming Soon Modal */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={showComingSoonModal}
-        onRequestClose={() => setShowComingSoonModal(false)}
-      >
-        <View className="flex-1 bg-black/50 justify-center items-center px-5">
-          <View className="bg-white rounded-xl p-6 w-full max-w-sm items-center">
-            <View className="w-20 h-20 rounded-full bg-yellow-100 justify-center items-center mb-4">
-              <Ionicons name="time" size={36} color="#F59E0B" />
-            </View>
-            
-            <Text className="text-xl font-bold text-gray-900 mb-3">Coming Soon</Text>
-            
-            <Text className="text-sm text-gray-600 text-center mb-2 leading-5">
-              {comingSoonTitle} service is currently in development and will be available soon.
-            </Text>
-            
-            <Text className="text-xs text-gray-500 text-center mb-6">
-              We're working hard to bring you this feature.
-            </Text>
-            
-            <TouchableOpacity
-              className="w-full py-3 bg-blue-900 rounded-lg items-center"
-              onPress={() => setShowComingSoonModal(false)}
-            >
-              <Text className="text-sm font-semibold text-white">Got it</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 };

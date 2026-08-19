@@ -14,13 +14,16 @@ import {
   StatusBar,
   Platform
 } from 'react-native';
-import { FontAwesome5, Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from './components/Icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Contacts from 'expo-contacts';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import SmoothBottomSheet from './components/SmoothBottomSheet';
 
 const ContactDetails = () => {
   const params = useLocalSearchParams();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   
   const [reportModalVisible, setReportModalVisible] = useState(false);
   const [reportText, setReportText] = useState('');
@@ -299,12 +302,12 @@ const ContactDetails = () => {
   ];
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <Stack.Screen options={{ headerShown: false }} />
       <StatusBar barStyle="light-content" backgroundColor="#1E3A8A" />
       
       {/* Refined Header with Brand Color */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity 
           style={styles.backButton}
           onPress={() => router.back()}
@@ -373,7 +376,7 @@ const ContactDetails = () => {
                 onPress={() => makePhoneCall(params.station_number, 'Station')}
               >
                 <View style={[styles.quickActionIcon, { backgroundColor: '#EFF6FF' }]}>
-                  <FontAwesome5 name="phone-alt" size={20} color="#1E3A8A" />
+                  <Ionicons name="phone-alt" size={20} color="#1E3A8A" />
                 </View>
                 <Text style={styles.quickActionText}>Call Station</Text>
               </TouchableOpacity>
@@ -385,7 +388,7 @@ const ContactDetails = () => {
                 onPress={() => makePhoneCall(params.member_in_charge_number, 'Officer')}
               >
                 <View style={[styles.quickActionIcon, { backgroundColor: '#DCFCE7' }]}>
-                  <FontAwesome5 name="user-shield" size={20} color="#059669" />
+                  <Ionicons name="user-shield" size={20} color="#059669" />
                 </View>
                 <Text style={styles.quickActionText}>Call OIC</Text>
               </TouchableOpacity>
@@ -397,7 +400,7 @@ const ContactDetails = () => {
                 onPress={getDirections}
               >
                 <View style={[styles.quickActionIcon, { backgroundColor: '#FEF3C7' }]}>
-                  <FontAwesome5 name="directions" size={20} color="#D97706" />
+                  <Ionicons name="directions" size={20} color="#D97706" />
                 </View>
                 <Text style={styles.quickActionText}>Directions</Text>
               </TouchableOpacity>
@@ -409,7 +412,7 @@ const ContactDetails = () => {
                 onPress={() => openWhatsApp(params.whatsapp_number)}
               >
                 <View style={[styles.quickActionIcon, { backgroundColor: '#DCFCE7' }]}>
-                  <FontAwesome5 name="whatsapp" size={20} color="#25D366" />
+                  <Ionicons name="whatsapp" size={20} color="#25D366" />
                 </View>
                 <Text style={styles.quickActionText}>WhatsApp</Text>
               </TouchableOpacity>
@@ -439,7 +442,7 @@ const ContactDetails = () => {
               style={[styles.actionButton, styles.actionButtonSuccess]}
               onPress={getDirections}
             >
-              <FontAwesome5 name="directions" size={18} color="#FFFFFF" />
+              <Ionicons name="directions" size={18} color="#FFFFFF" />
               <Text style={styles.actionButtonSuccessText}>Get Directions</Text>
             </TouchableOpacity>
           )}
@@ -467,7 +470,7 @@ const ContactDetails = () => {
                           onPress={item.action}
                           style={styles.detailActionButton}
                         >
-                          <FontAwesome5 
+                          <Ionicons 
                             name={item.icon} 
                             size={18} 
                             color={item.color || '#1E3A8A'} 
@@ -498,7 +501,7 @@ const ContactDetails = () => {
                 >
                   <View style={styles.locationButtonContent}>
                     <View style={styles.locationIcon}>
-                      <FontAwesome5 name="directions" size={20} color="#059669" />
+                      <Ionicons name="directions" size={20} color="#059669" />
                     </View>
                     <View style={styles.locationTextContainer}>
                       <Text style={styles.locationButtonTitle}>Open in Maps</Text>
@@ -533,7 +536,7 @@ const ContactDetails = () => {
           >
             <View style={styles.reportButtonContent}>
               <View style={styles.reportIcon}>
-                <MaterialIcons name="report" size={24} color="#DC2626" />
+                <Ionicons name="report" size={24} color="#DC2626" />
               </View>
               <View style={styles.reportTextContainer}>
                 <Text style={styles.reportTitle}>Report Incorrect Information</Text>
@@ -546,14 +549,11 @@ const ContactDetails = () => {
       </ScrollView>
 
       {/* Report Modal - Clean Design */}
-      <Modal
-        animationType="slide"
-        transparent={true}
+      <SmoothBottomSheet
         visible={reportModalVisible}
-        onRequestClose={() => setReportModalVisible(false)}
+        onClose={() => setReportModalVisible(false)}
+        contentStyle={styles.modalContent}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Report Issue</Text>
               <TouchableOpacity 
@@ -581,7 +581,7 @@ const ContactDetails = () => {
                     ]}
                     onPress={() => setReportCategory(category.id)}
                   >
-                    <FontAwesome5 
+                    <Ionicons 
                       name={category.icon} 
                       size={14} 
                       color={reportCategory === category.id ? '#DC2626' : '#6B7280'} 
@@ -627,9 +627,7 @@ const ContactDetails = () => {
                 Your report will be reviewed within 24 hours
               </Text>
             </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      </SmoothBottomSheet>
     </View>
   );
 };
@@ -641,7 +639,7 @@ const styles = {
   },
   header: {
     backgroundColor: '#1E3A8A',
-    paddingTop: Platform.OS === 'ios' ? 60 : 20,
+    paddingTop: 12,
     paddingBottom: 12,
     paddingHorizontal: 16,
     flexDirection: 'row',

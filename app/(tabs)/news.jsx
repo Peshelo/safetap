@@ -17,9 +17,12 @@ import {
   Alert,
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
-import pb from "../../lib/connection";
-import { Ionicons, MaterialIcons, MaterialCommunityIcons, FontAwesome5 } from "@expo/vector-icons";
+import api from "../../lib/connection";
+import { Ionicons } from "../components/Icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import CustomHeader from "../components/Header";
+import SmoothBottomSheet from "../components/SmoothBottomSheet";
+import ArticleImage, { FALLBACK_IMAGE } from "../components/ArticleImage";
 import * as Sharing from "expo-sharing";
 import * as WebBrowser from "expo-web-browser";
 
@@ -27,7 +30,6 @@ const { width, height } = Dimensions.get("window");
 const PAGE_SIZE = 10;
 
 // ─── Fallback Image ────────────────────────────────────────────────────────────
-const FALLBACK_IMAGE = require("../../assets/images/fallback.png");
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const News = () => {
@@ -62,7 +64,7 @@ const News = () => {
       if (page === 1) setLoading(true);
       else setLoadingMore(true);
 
-      const records = await pb.collection("news").getList(page, PAGE_SIZE, {
+      const records = await api.collection("news").getList(page, PAGE_SIZE, {
         sort: sortBy === "newest" ? "-created" : "created",
       });
 
@@ -74,7 +76,7 @@ const News = () => {
         setFilteredNews((prev) => [...prev, ...records.items]);
       }
 
-      setHasMore(records.items.length === PAGE_SIZE);
+      setHasMore(records.page < records.totalPages);
       setCurrentPage(page);
     } catch (err) {
       console.error("Failed to fetch news", err);
@@ -116,7 +118,8 @@ const News = () => {
   // ── Helpers ────────────────────────────────────────────────────────────────
   const getImageUrl = (item) => {
     if (item.file) {
-      const url = pb.files.getURL(item, item.file);
+      const url = api.files.getURL(item, item.file);
+      if (item.cover_image_url) return url;
       const ext = url.split(".").pop().toLowerCase();
       if (["jpg", "jpeg", "png", "gif", "webp"].includes(ext)) return url;
     }
@@ -125,8 +128,10 @@ const News = () => {
 
   const formatRelativeDate = (dateString) => {
     const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return "Recently";
     const now = new Date();
-    const diffTime = Math.abs(now - date);
+    const diffTime = now - date;
+    if (diffTime < 0) return formatFullDate(dateString);
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
     const diffMonths = Math.floor(diffDays / 30);
@@ -143,6 +148,7 @@ const News = () => {
 
   const formatFullDate = (dateString) => {
     const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return "Date unavailable";
     return date.toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",
@@ -247,9 +253,15 @@ const News = () => {
 
     articles.forEach((article) => {
       const date = new Date(article.created);
+      if (Number.isNaN(date.getTime())) {
+        groups.older.push(article);
+        return;
+      }
       const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
       
-      if (diffDays === 0) {
+      if (diffDays < 0) {
+        groups.today.push(article);
+      } else if (diffDays === 0) {
         groups.today.push(article);
       } else if (diffDays === 1) {
         groups.yesterday.push(article);
@@ -285,7 +297,6 @@ const News = () => {
 
   // ── News Card Component (Image first) ──────────────────────────────────────
   const NewsCard = ({ item }) => {
-    const imageUrl = getImageUrl(item);
     const category = item.category || "Press Release";
     const catColor = getCategoryColor(category);
     const relativeDate = formatRelativeDate(item.created);
@@ -299,16 +310,12 @@ const News = () => {
         }}
         activeOpacity={0.9}
       >
-        <Image
-          source={imageUrl ? { uri: imageUrl } : FALLBACK_IMAGE}
-          style={styles.newsImage}
-        />
         <View style={styles.newsContent}>
           <View style={styles.newsHeader}>
-            {/* <View style={[styles.categoryChip, { backgroundColor: `${catColor}15` }]}>
+            <View style={[styles.categoryChip, { backgroundColor: `${catColor}15` }]}>
               <Ionicons name={getCategoryIcon(category)} size={12} color={catColor} />
               <Text style={[styles.categoryText, { color: catColor }]}>{category}</Text>
-            </View> */}
+            </View>
             <Text style={styles.newsDate}>{relativeDate}</Text>
           </View>
           <Text style={styles.newsTitle} numberOfLines={2}>
@@ -320,6 +327,41 @@ const News = () => {
           <View style={styles.newsFooter}>
             <Text style={[styles.readMoreLink, { color: catColor }]}>Read full story</Text>
             <Ionicons name="chevron-forward" size={14} color={catColor} />
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const FeaturedStory = ({ item }) => {
+    const imageUrl = getImageUrl(item);
+    const category = item.category || "Press Release";
+    const catColor = getCategoryColor(category);
+    return (
+      <TouchableOpacity
+        style={styles.featuredCard}
+        activeOpacity={0.92}
+        onPress={() => { setSelectedArticle(item); setIsModalVisible(true); }}
+      >
+        <ArticleImage source={imageUrl ? { uri: imageUrl } : FALLBACK_IMAGE} style={styles.featuredImage} resizeMode="cover" />
+        <View style={styles.featuredContent}>
+          <View style={styles.featuredKickerRow}>
+            <Text style={styles.featuredKicker}>TOP STORY</Text>
+            <Text style={styles.featuredDate}>{formatRelativeDate(item.created)}</Text>
+          </View>
+          <Text style={styles.featuredTitle} numberOfLines={3}>{item.title}</Text>
+          <Text style={styles.featuredExcerpt} numberOfLines={2}>
+            {item.description?.replace(/<[^>]*>/g, "") || "Read the latest official update."}
+          </Text>
+          <View style={styles.featuredFooter}>
+            <View style={[styles.categoryChip, { backgroundColor: `${catColor}15` }]}>
+              <Ionicons name={getCategoryIcon(category)} size={12} color={catColor} />
+              <Text style={[styles.categoryText, { color: catColor }]}>{category}</Text>
+            </View>
+            <View style={styles.readStoryAction}>
+              <Text style={styles.readStoryText}>Read story</Text>
+              <Ionicons name="arrow-forward" size={16} color="#1E3A8A" />
+            </View>
           </View>
         </View>
       </TouchableOpacity>
@@ -402,7 +444,7 @@ const News = () => {
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false}>
-            <Image
+            <ArticleImage
               source={imageUrl ? { uri: imageUrl } : FALLBACK_IMAGE}
               style={styles.modalImage}
             />
@@ -454,14 +496,11 @@ const News = () => {
 
   // ── Filter Modal ───────────────────────────────────────────────────────────
   const FilterModal = () => (
-    <Modal
+    <SmoothBottomSheet
       visible={showFilters}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={() => setShowFilters(false)}
+      onClose={() => setShowFilters(false)}
+      contentStyle={styles.filterModalContent}
     >
-      <View style={styles.filterModalOverlay}>
-        <View style={styles.filterModalContent}>
           <View style={styles.filterModalHeader}>
             <Text style={styles.filterModalTitle}>Filter & Sort</Text>
             <TouchableOpacity
@@ -542,10 +581,7 @@ const News = () => {
             </TouchableOpacity>
           </View>
           
-          <View style={{ height: insets.bottom }} />
-        </View>
-      </View>
-    </Modal>
+    </SmoothBottomSheet>
   );
 
   // ── Main Render ───────────────────────────────────────────────────────────
@@ -553,12 +589,7 @@ const News = () => {
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <View>
-          <Text style={styles.headerEyebrow}>Zimbabwe Republic Police</Text>
-          <Text style={styles.headerTitle}>News & Press</Text>
-        </View>
+      <CustomHeader title="News & Press" subtitle="Zimbabwe Republic Police" showLogo compact rightComponent={(
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={styles.headerIcon}
@@ -570,7 +601,7 @@ const News = () => {
             )}
           </TouchableOpacity>
         </View>
-      </View>
+      )} />
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
@@ -590,6 +621,20 @@ const News = () => {
             </TouchableOpacity>
           )}
         </View>
+      </View>
+
+      <View style={styles.categoryNav}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryNavContent}>
+          {categories.map((category) => {
+            const active = categoryFilter === category.id;
+            return (
+              <TouchableOpacity key={category.id} style={[styles.categoryNavItem, active && styles.categoryNavItemActive]} onPress={() => setCategoryFilter(category.id)}>
+                <Ionicons name={category.icon} size={16} color={active ? "#FFFFFF" : "#475569"} />
+                <Text style={[styles.categoryNavText, active && styles.categoryNavTextActive]}>{category.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {/* Active Filters */}
@@ -645,7 +690,7 @@ const News = () => {
         </ScrollView>
       ) : (
         <FlatList
-          data={filteredNews}
+          data={filteredNews.slice(1)}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => <NewsCard item={item} />}
           contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
@@ -662,11 +707,14 @@ const News = () => {
           onEndReachedThreshold={0.3}
           ListHeaderComponent={
             filteredNews.length > 0 && !loading ? (
-              <View style={styles.resultsHeader}>
-                <Text style={styles.resultsText}>
-                  {filteredNews.length} {filteredNews.length === 1 ? "article" : "articles"}
-                  {search && ` matching "${search}"`}
-                </Text>
+              <View>
+                <FeaturedStory item={filteredNews[0]} />
+                {filteredNews.length > 1 && (
+                  <View style={styles.latestHeader}>
+                    <Text style={styles.latestTitle}>Latest updates</Text>
+                    <Text style={styles.resultsText}>{filteredNews.length} stories</Text>
+                  </View>
+                )}
               </View>
             ) : null
           }
@@ -787,6 +835,28 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#111827",
   },
+  categoryNav: {
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+  },
+  categoryNavContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 8,
+  },
+  categoryNavItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#F1F5F9",
+  },
+  categoryNavItemActive: { backgroundColor: "#1E3A8A" },
+  categoryNavText: { fontSize: 13, fontWeight: "600", color: "#475569" },
+  categoryNavTextActive: { color: "#FFFFFF" },
   activeFilters: {
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 16,
@@ -869,27 +939,13 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   newsCard: {
-    // backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    marginBottom: 16,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8,
+    marginBottom: 12,
     overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    border: "0px 1px solid #E5E7EB",
-  },
-  newsImage: {
-    width: "100%",
-    height: 200,
-    backgroundColor: "#F3F4F6",
-    // boxShadow: "4px 4px 6px rgba(0,0,0,0.1)",
-    border: "1px solid #E5E7EB",
+    elevation: 0,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderTopEndRadius: 16,
-    borderTopStartRadius: 16,
+    borderColor: "#E2E8F0",
   },
   newsContent: {
     padding: 16,
@@ -907,27 +963,29 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
     gap: 4,
+    flexShrink: 1,
   },
   categoryText: {
     fontSize: 10,
     fontWeight: "700",
     letterSpacing: 0.5,
+    flexShrink: 1,
   },
   newsDate: {
     fontSize: 11,
     color: "#9CA3AF",
   },
   newsTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "700",
     color: "#111827",
-    lineHeight: 22,
+    lineHeight: 23,
     marginBottom: 8,
   },
   newsExcerpt: {
     fontSize: 13,
     color: "#6B7280",
-    lineHeight: 18,
+    lineHeight: 19,
     marginBottom: 12,
   },
   newsFooter: {
@@ -939,6 +997,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
   },
+  featuredCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginBottom: 22,
+    elevation: 0,
+  },
+  featuredImage: { width: "100%", height: 210, backgroundColor: "#E2E8F0" },
+  featuredContent: { padding: 18 },
+  featuredKickerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
+  featuredKicker: { fontSize: 11, fontWeight: "800", color: "#B91C1C", letterSpacing: 1.1 },
+  featuredDate: { fontSize: 12, color: "#64748B" },
+  featuredTitle: { fontSize: 23, lineHeight: 29, fontWeight: "800", color: "#0F172A", letterSpacing: -0.4 },
+  featuredExcerpt: { fontSize: 14, lineHeight: 21, color: "#64748B", marginTop: 10 },
+  featuredFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginTop: 16 },
+  readStoryAction: { flexDirection: "row", alignItems: "center", gap: 5 },
+  readStoryText: { fontSize: 13, fontWeight: "700", color: "#1E3A8A" },
+  latestHeader: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginBottom: 12 },
+  latestTitle: { fontSize: 20, fontWeight: "800", color: "#0F172A", letterSpacing: -0.3 },
   skeletonContainer: {
     padding: 16,
   },

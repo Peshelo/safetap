@@ -11,30 +11,35 @@ import {
   Animated,
   Dimensions,
   ScrollView,
+  FlatList,
   PanResponder,
-  SafeAreaView,
   StatusBar,
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
 import * as Location from "expo-location";
-import pb from "../../lib/connection";
+import api from "../../lib/connection";
 import useNetworkStatus from "../hooks/useNetworkStatus";
 import OfflineBanner from "../components/OfflineBanner";
-import {
-  FontAwesome5,
-  Ionicons,
-  MaterialIcons,
-  MaterialCommunityIcons,
-} from "@expo/vector-icons";
+import { Ionicons } from "../components/Icons";
 import { Image } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 // ─── IMPORTANT ─────────────────────────────────────────────────────────────────
 // Replace with your actual Google Maps API key with Directions API enabled
-const GOOGLE_MAPS_API_KEY = "YOUR_GOOGLE_MAPS_API_KEY";
+const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || "";
 // ────────────────────────────────────────────────────────────────────────────────
 
 const { width, height } = Dimensions.get("window");
+const MAP_STYLE = [
+  { elementType: "geometry", stylers: [{ color: "#F4F6F8" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#52606D" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#FFFFFF" }] },
+  { featureType: "poi", stylers: [{ visibility: "off" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#FFFFFF" }] },
+  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#DDE3EA" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#DCEBF3" }] },
+];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
@@ -99,9 +104,12 @@ const stripHtml = (html) => html?.replace(/<[^>]*>/g, "") ?? "";
 
 // ── Component ─────────────────────────────────────────────────────────────────
 const PoliceMap = () => {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const isOnline = useNetworkStatus();
   const mapRef = useRef(null);
+  const regionFetchTimer = useRef(null);
+  const lastFetchCenter = useRef(null);
 
   // Animation values
   const sheetAnim = useRef(new Animated.Value(0)).current;
@@ -124,6 +132,9 @@ const PoliceMap = () => {
   const [selectedStation, setSelectedStation] = useState(null);
   const [isSheetOpen, setIsSheetOpen] = useState(true);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [stationPage, setStationPage] = useState(1);
+  const [hasMoreStations, setHasMoreStations] = useState(false);
+  const [loadingMoreStations, setLoadingMoreStations] = useState(false);
 
   // Navigation state
   const [routeCoords, setRouteCoords] = useState([]);
@@ -164,14 +175,14 @@ const PoliceMap = () => {
   ).current;
 
   // ── Data fetching from real API ───────────────────────────────────────────
-  const fetchPoliceStations = async () => {
+  const fetchPoliceStations = async (center = userCoords, page = 1) => {
     try {
-      setLoading(true);
+      if (!center) return;
+      if (policeStations.length === 0) setLoading(true);
       
       if (isOnline) {
-        const records = await pb.collection("contacts").getFullList({
-          sort: "-created",
-        });
+        const payload = await api.nearbyStations(center.latitude, center.longitude, 35, page, 20);
+        const records = payload.items || [];
         
         const stationsWithCoords = records
           .filter((s) => isValidCoordinate(parseFloat(s.latitude), parseFloat(s.longitude)))
@@ -187,20 +198,16 @@ const PoliceMap = () => {
               address: s.address || "Address not available",
               description: s.description || "No description available",
               operating_hours: s.operating_hours || "24/7",
-              distance: userCoords
-                ? getDistanceFromLatLonInKm(
-                    userCoords.latitude,
-                    userCoords.longitude,
-                    lat,
-                    lng
-                  )
-                : null,
+              distance: s.distance_km ?? getDistanceFromLatLonInKm(center.latitude, center.longitude, lat, lng),
             };
           })
           .sort((a, b) => (a.distance || Infinity) - (b.distance || Infinity));
 
         setPoliceStations(stationsWithCoords);
         setFilteredStations(stationsWithCoords);
+        setStationPage(page);
+        setHasMoreStations(Boolean(payload.has_more));
+        lastFetchCenter.current = center;
       } else {
         Alert.alert("Offline", "Unable to fetch stations. Please check your connection.");
       }
@@ -210,6 +217,48 @@ const PoliceMap = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadMoreStations = async () => {
+    if (!hasMoreStations || loadingMoreStations || !lastFetchCenter.current) return;
+    try {
+      setLoadingMoreStations(true);
+      const nextPage = stationPage + 1;
+      const center = lastFetchCenter.current;
+      const payload = await api.nearbyStations(center.latitude, center.longitude, 35, nextPage, 20);
+      const nextStations = (payload.items || [])
+        .filter((station) => isValidCoordinate(station.latitude, station.longitude))
+        .map((station) => ({
+          id: station.id,
+          station: station.station || station.name || "Police Station",
+          latitude: parseFloat(station.latitude),
+          longitude: parseFloat(station.longitude),
+          station_number: station.station_number || station.phone,
+          address: station.address || "Address not available",
+          description: station.description || "No description available",
+          operating_hours: station.operating_hours || "24/7",
+          distance: station.distance_km,
+        }));
+      setPoliceStations((current) => [...current, ...nextStations.filter((item) => !current.some((existing) => existing.id === item.id))]);
+      setStationPage(nextPage);
+      setHasMoreStations(Boolean(payload.has_more));
+    } catch (error) {
+      Alert.alert("Error", "Could not load more nearby stations");
+    } finally {
+      setLoadingMoreStations(false);
+    }
+  };
+
+  const handleRegionChangeComplete = (region) => {
+    setMapRegion(region);
+    if (!isOnline || isNavigating) return;
+    const previous = lastFetchCenter.current;
+    const movedKm = previous
+      ? getDistanceFromLatLonInKm(previous.latitude, previous.longitude, region.latitude, region.longitude)
+      : Infinity;
+    if (movedKm < 4) return;
+    clearTimeout(regionFetchTimer.current);
+    regionFetchTimer.current = setTimeout(() => fetchPoliceStations(region), 450);
   };
 
   const getLocation = async () => {
@@ -226,19 +275,33 @@ const PoliceMap = () => {
         );
         return;
       }
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (!servicesEnabled) {
+        Alert.alert(
+          "Location Services Off",
+          "Turn on device location to centre the map on your position. You can still browse and search stations manually."
+        );
+        return;
+      }
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
       const { latitude, longitude } = location.coords;
       setUserCoords({ latitude, longitude });
-      setMapRegion({
+      const nextRegion = {
         latitude,
         longitude,
         latitudeDelta: 0.0922,
         longitudeDelta: 0.0421,
-      });
+      };
+      setMapRegion(nextRegion);
+      mapRef.current?.animateToRegion(nextRegion, 650);
     } catch (err) {
       console.error("Location error:", err);
+      Alert.alert(
+        "Location Unavailable",
+        "Your position could not be determined. You can still browse and search police stations on the map."
+      );
     }
   };
 
@@ -314,6 +377,10 @@ const PoliceMap = () => {
 
   // ── In-app Navigation using Directions API ─────────────────────────────────
   const handleNavigate = async (station) => {
+    if (!GOOGLE_MAPS_API_KEY) {
+      Alert.alert("Navigation unavailable", "Add EXPO_PUBLIC_GOOGLE_MAPS_API_KEY to enable route directions.");
+      return;
+    }
     if (!isValidCoordinate(station.latitude, station.longitude)) {
       Alert.alert("Navigation Error", "Cannot navigate — invalid station location.");
       return;
@@ -483,6 +550,8 @@ const PoliceMap = () => {
     if (userCoords) fetchPoliceStations();
   }, [userCoords, isOnline]);
 
+  useEffect(() => () => clearTimeout(regionFetchTimer.current), []);
+
   useEffect(() => {
     if (searchQuery.trim() === "") {
       setFilteredStations(policeStations);
@@ -520,7 +589,7 @@ const PoliceMap = () => {
       >
         <View style={styles.stationCardInner}>
           <View style={[styles.stationIcon, isSelected && styles.stationIconSelected]}>
-            <FontAwesome5 name="shield-alt" size={20} color="#FFFFFF" />
+            <Ionicons name="shield-alt" size={20} color="#FFFFFF" />
           </View>
 
           <View style={styles.stationInfo}>
@@ -536,7 +605,7 @@ const PoliceMap = () => {
             </View>
 
             <View style={styles.stationAddress}>
-              <MaterialIcons name="location-on" size={14} color="#6B7280" />
+              <Ionicons name="location-on" size={14} color="#6B7280" />
               <Text style={styles.stationAddressText} numberOfLines={1}>
                 {station.address}
               </Text>
@@ -544,7 +613,7 @@ const PoliceMap = () => {
 
             {station.station_number && (
               <View style={styles.stationPhone}>
-                <MaterialIcons name="phone" size={12} color="#6B7280" />
+                <Ionicons name="phone" size={12} color="#6B7280" />
                 <Text style={styles.stationPhoneText}>{station.station_number}</Text>
               </View>
             )}
@@ -565,7 +634,7 @@ const PoliceMap = () => {
       {routeSteps.length > 0 && (
         <View style={styles.currentStep}>
           <View style={styles.currentStepIcon}>
-            <MaterialIcons
+            <Ionicons
               name={getManeuverIcon(routeSteps[activeStepIndex]?.maneuver)}
               size={24}
               color="#FFFFFF"
@@ -585,14 +654,14 @@ const PoliceMap = () => {
               onPress={() => setActiveStepIndex((i) => Math.max(i - 1, 0))}
               style={[styles.stepNavButton, activeStepIndex === 0 && styles.stepNavButtonDisabled]}
             >
-              <MaterialIcons name="chevron-left" size={24} color={activeStepIndex === 0 ? "#D1D5DB" : "#3B82F6"} />
+              <Ionicons name="chevron-left" size={24} color={activeStepIndex === 0 ? "#D1D5DB" : "#3B82F6"} />
             </TouchableOpacity>
             <TouchableOpacity
               disabled={activeStepIndex === routeSteps.length - 1}
               onPress={() => setActiveStepIndex((i) => Math.min(i + 1, routeSteps.length - 1))}
               style={[styles.stepNavButton, activeStepIndex === routeSteps.length - 1 && styles.stepNavButtonDisabled]}
             >
-              <MaterialIcons name="chevron-right" size={24} color={activeStepIndex === routeSteps.length - 1 ? "#D1D5DB" : "#3B82F6"} />
+              <Ionicons name="chevron-right" size={24} color={activeStepIndex === routeSteps.length - 1 ? "#D1D5DB" : "#3B82F6"} />
             </TouchableOpacity>
           </View>
         </View>
@@ -602,11 +671,11 @@ const PoliceMap = () => {
       {routeSummary && (
         <View style={styles.routeSummary}>
           <View style={styles.summaryItem}>
-            <MaterialIcons name="straighten" size={16} color="#6B7280" />
+            <Ionicons name="straighten" size={16} color="#6B7280" />
             <Text style={styles.summaryText}>{routeSummary.distance}</Text>
           </View>
           <View style={styles.summaryItem}>
-            <MaterialIcons name="schedule" size={16} color="#6B7280" />
+            <Ionicons name="schedule" size={16} color="#6B7280" />
             <Text style={styles.summaryText}>{routeSummary.duration}</Text>
           </View>
         </View>
@@ -624,7 +693,7 @@ const PoliceMap = () => {
             ]}
           >
             <View style={[styles.stepIcon, i === activeStepIndex && styles.stepIconActive]}>
-              <MaterialIcons
+              <Ionicons
                 name={getManeuverIcon(step.maneuver)}
                 size={16}
                 color={i === activeStepIndex ? "#FFFFFF" : "#6B7280"}
@@ -644,7 +713,7 @@ const PoliceMap = () => {
         {/* Destination reached */}
         <View style={styles.destinationItem}>
           <View style={styles.destinationIcon}>
-            <FontAwesome5 name="shield-alt" size={14} color="#FFFFFF" />
+            <Ionicons name="shield-alt" size={14} color="#FFFFFF" />
           </View>
           <Text style={styles.destinationText}>
             {selectedStation?.station ?? "Destination"}
@@ -661,7 +730,7 @@ const PoliceMap = () => {
 
   // ── JSX ───────────────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["bottom"]}>
       <StatusBar barStyle="dark-content" backgroundColor="#F9FAFB" />
       <Stack.Screen options={{ headerShown: false }} />
 
@@ -671,21 +740,14 @@ const PoliceMap = () => {
           ref={mapRef}
           provider={PROVIDER_GOOGLE}
           style={styles.map}
-          region={mapRegion}
+          initialRegion={mapRegion}
+          onRegionChangeComplete={handleRegionChangeComplete}
+          customMapStyle={MAP_STYLE}
           showsUserLocation
           showsMyLocationButton={false}
           showsCompass
           toolbarEnabled={false}
         >
-          {/* User marker */}
-          {userCoords && (
-            <Marker coordinate={userCoords}>
-              <View style={styles.userMarker}>
-                <View style={styles.userMarkerDot} />
-              </View>
-            </Marker>
-          )}
-
           {/* Station markers */}
           {!isNavigating && stationsWithValidCoords.map((station, index) => {
             const isSelected = selectedStation?.id === station.id;
@@ -699,7 +761,7 @@ const PoliceMap = () => {
                 onPress={() => focusOnStation(station)}
               >
                 <View style={[styles.marker, isSelected && styles.markerSelected]}>
-                  <View style={styles.markerDot} />
+                  <Ionicons name="shield-checkmark" size={isSelected ? 20 : 17} color="#FFFFFF" />
                 </View>
               </Marker>
             );
@@ -717,7 +779,7 @@ const PoliceMap = () => {
         </MapView>
 
         {/* Header with faint background */}
-        <View style={styles.headerOverlay}>
+        <View style={[styles.headerOverlay, { paddingTop: insets.top + 8 }]}>
           <View style={styles.header}>
             <TouchableOpacity
               style={styles.headerButton}
@@ -745,7 +807,7 @@ const PoliceMap = () => {
                 style={styles.headerButton}
                 onPress={focusOnUser}
               >
-                <MaterialCommunityIcons name="target" size={24} color="#1F2937" />
+                <Ionicons name="target" size={24} color="#1F2937" />
               </TouchableOpacity>
             )}
             {isNavigating && <View style={styles.headerButton} />}
@@ -784,9 +846,8 @@ const PoliceMap = () => {
                 transform: [{ translateY: sheetAnim }],
               },
             ]}
-            {...panResponder.panHandlers}
           >
-            <View style={styles.sheetHandle}>
+            <View style={styles.sheetHandle} {...panResponder.panHandlers}>
               <View style={styles.sheetHandleBar} />
             </View>
 
@@ -805,7 +866,7 @@ const PoliceMap = () => {
                 </View>
               ) : filteredStations.length === 0 ? (
                 <View style={styles.emptyContainer}>
-                  <MaterialIcons name="location-off" size={64} color="#D1D5DB" />
+                  <Ionicons name="location-off" size={64} color="#D1D5DB" />
                   <Text style={styles.emptyTitle}>No police stations found</Text>
                   <Text style={styles.emptySubtitle}>
                     {searchQuery
@@ -814,14 +875,16 @@ const PoliceMap = () => {
                   </Text>
                 </View>
               ) : (
-                <ScrollView
+                <FlatList
+                  data={filteredStations}
+                  keyExtractor={(station, index) => String(station.id || index)}
+                  renderItem={({ item, index }) => renderStationCard(item, index)}
                   showsVerticalScrollIndicator={false}
                   style={styles.stationsList}
-                >
-                  {filteredStations.map((station, index) =>
-                    renderStationCard(station, index)
-                  )}
-                </ScrollView>
+                  onEndReached={searchQuery ? undefined : loadMoreStations}
+                  onEndReachedThreshold={0.35}
+                  ListFooterComponent={loadingMoreStations ? <ActivityIndicator color="#1E3A8A" style={{ marginVertical: 16 }} /> : null}
+                />
               )}
             </View>
           </Animated.View>
@@ -839,9 +902,8 @@ const PoliceMap = () => {
                 transform: [{ translateY: detailsSheetAnim }],
               },
             ]}
-            {...detailsPanResponder.panHandlers}
           >
-            <View style={styles.sheetHandle}>
+            <View style={styles.sheetHandle} {...detailsPanResponder.panHandlers}>
               <View style={styles.sheetHandleBar} />
             </View>
 
@@ -850,12 +912,12 @@ const PoliceMap = () => {
                 {/* Header */}
                 <View style={styles.detailHeader}>
                   <View style={styles.detailIcon}>
-                    <FontAwesome5 name="shield-alt" size={32} color="#FFFFFF" />
+                    <Ionicons name="shield-alt" size={32} color="#FFFFFF" />
                   </View>
                   <View style={styles.detailHeaderInfo}>
                     <Text style={styles.detailTitle}>{selectedStation.station}</Text>
                     <View style={styles.detailAddress}>
-                      <MaterialIcons name="location-on" size={16} color="#6B7280" />
+                      <Ionicons name="location-on" size={16} color="#6B7280" />
                       <Text style={styles.detailAddressText}>
                         {selectedStation.address}
                       </Text>
@@ -874,7 +936,7 @@ const PoliceMap = () => {
                       <ActivityIndicator color="#FFFFFF" />
                     ) : (
                       <>
-                        <MaterialCommunityIcons name="navigation" size={20} color="#FFFFFF" />
+                        <Ionicons name="navigation" size={20} color="#FFFFFF" />
                         <Text style={styles.actionButtonText}>Navigate</Text>
                       </>
                     )}
@@ -885,7 +947,7 @@ const PoliceMap = () => {
                     onPress={() => handleCall(selectedStation)}
                     disabled={!selectedStation.station_number}
                   >
-                    <MaterialIcons name="phone" size={20} color="#FFFFFF" />
+                    <Ionicons name="phone" size={20} color="#FFFFFF" />
                     <Text style={styles.actionButtonText}>Call</Text>
                   </TouchableOpacity>
                 </View>
@@ -897,7 +959,7 @@ const PoliceMap = () => {
                   {selectedStation.station_number && (
                     <View style={styles.detailRow}>
                       <View style={styles.detailIconSmall}>
-                        <MaterialIcons name="phone" size={18} color="#3B82F6" />
+                        <Ionicons name="phone" size={18} color="#3B82F6" />
                       </View>
                       <View style={styles.detailRowContent}>
                         <Text style={styles.detailLabel}>Phone Number</Text>
@@ -909,7 +971,7 @@ const PoliceMap = () => {
                   {userCoords && (
                     <View style={styles.detailRow}>
                       <View style={styles.detailIconSmall}>
-                        <MaterialIcons name="directions" size={18} color="#EF4444" />
+                        <Ionicons name="directions" size={18} color="#EF4444" />
                       </View>
                       <View style={styles.detailRowContent}>
                         <Text style={styles.detailLabel}>Distance</Text>
@@ -923,7 +985,7 @@ const PoliceMap = () => {
                   {selectedStation.operating_hours && (
                     <View style={styles.detailRow}>
                       <View style={styles.detailIconSmall}>
-                        <MaterialIcons name="schedule" size={18} color="#10B981" />
+                        <Ionicons name="schedule" size={18} color="#10B981" />
                       </View>
                       <View style={styles.detailRowContent}>
                         <Text style={styles.detailLabel}>Operating Hours</Text>
@@ -935,7 +997,7 @@ const PoliceMap = () => {
                   {selectedStation.description && (
                     <View style={styles.detailRow}>
                       <View style={styles.detailIconSmall}>
-                        <MaterialIcons name="info" size={18} color="#8B5CF6" />
+                        <Ionicons name="info" size={18} color="#8B5CF6" />
                       </View>
                       <View style={styles.detailRowContent}>
                         <Text style={styles.detailLabel}>Description</Text>
@@ -950,10 +1012,10 @@ const PoliceMap = () => {
                   <Text style={styles.sectionTitle}>Emergency Actions</Text>
                   <TouchableOpacity
                     style={styles.emergencyButton}
-                    onPress={() => router.push("/emergency")}
+                    onPress={() => Linking.openURL("tel:995")}
                   >
                     <View style={styles.emergencyIcon}>
-                      <MaterialIcons name="emergency" size={20} color="#DC2626" />
+                      <Ionicons name="emergency" size={20} color="#DC2626" />
                     </View>
                     <View style={styles.emergencyContent}>
                       <Text style={styles.emergencyTitle}>SOS Emergency</Text>
@@ -967,7 +1029,7 @@ const PoliceMap = () => {
                     onPress={() => Linking.openURL("tel:995")}
                   >
                     <View style={styles.emergencyIcon}>
-                      <MaterialIcons name="call" size={20} color="#3B82F6" />
+                      <Ionicons name="call" size={20} color="#3B82F6" />
                     </View>
                     <View style={styles.emergencyContent}>
                       <Text style={styles.emergencyTitle}>Call Emergency</Text>
@@ -1010,8 +1072,8 @@ const styles = {
     top: 0,
     left: 0,
     right: 0,
-    paddingTop: Platform.OS === "ios" ? 50 : 40,
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    paddingTop: 8,
+    backgroundColor: "transparent",
     zIndex: 10,
   },
   header: {
@@ -1019,44 +1081,57 @@ const styles = {
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingBottom: 10,
+    gap: 10,
   },
   headerButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#F3F4F6",
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
     justifyContent: "center",
     alignItems: "center",
+    elevation: 7,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
   },
   headerTitleContainer: {
     flex: 1,
-    alignItems: "center",
+    backgroundColor: "#1E3A8A",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    elevation: 6,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#1F2937",
+    color: "#FFFFFF",
   },
   headerSubtitle: {
     fontSize: 12,
-    color: "#6B7280",
+    color: "#DBEAFE",
     marginTop: 2,
   },
   searchContainer: {
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingBottom: 10,
   },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F9FAFB",
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    height: 44,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    height: 52,
     gap: 8,
+    elevation: 7,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.13,
+    shadowRadius: 10,
   },
   searchInput: {
     flex: 1,
@@ -1070,24 +1145,24 @@ const styles = {
     right: 0,
     bottom: 0,
     backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     elevation: 20,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
-    maxHeight: height * 0.6,
+    maxHeight: height * 0.52,
   },
   sheetHandle: {
     alignItems: "center",
     paddingVertical: 12,
   },
   sheetHandleBar: {
-    width: 40,
-    height: 4,
-    backgroundColor: "#D1D5DB",
-    borderRadius: 2,
+    width: 44,
+    height: 5,
+    backgroundColor: "#CBD5E1",
+    borderRadius: 3,
   },
   sheetContent: {
     flex: 1,
@@ -1098,9 +1173,9 @@ const styles = {
     marginBottom: 16,
   },
   sheetTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#1F2937",
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#0F172A",
   },
   sheetSubtitle: {
     fontSize: 13,
@@ -1112,16 +1187,13 @@ const styles = {
   },
   // Station Card
   stationCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    marginBottom: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#F3F4F6",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 14,
+    marginBottom: 10,
+    padding: 14,
   },
   stationCardSelected: {
-    borderColor: "#3B82F6",
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#E8EEF9",
   },
   stationCardInner: {
     flexDirection: "row",
@@ -1130,8 +1202,8 @@ const styles = {
   stationIcon: {
     width: 48,
     height: 48,
-    borderRadius: 12,
-    backgroundColor: "#EF4444",
+    borderRadius: 16,
+    backgroundColor: "#1E3A8A",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -1194,19 +1266,21 @@ const styles = {
     elevation: 5,
   },
   marker: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: "#EF4444",
-    borderWidth: 2,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: "#1E3A8A",
+    borderWidth: 3,
     borderColor: "#FFFFFF",
-    elevation: 3,
+    elevation: 8,
+    alignItems: "center",
+    justifyContent: "center",
   },
   markerSelected: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: "#3B82F6",
+    width: 46,
+    height: 46,
+    borderRadius: 17,
+    backgroundColor: "#DC2626",
   },
   markerDot: {
     width: "100%",

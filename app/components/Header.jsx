@@ -18,6 +18,7 @@ const CustomHeader = ({
   onBack,
   showLogo = false,
   rightComponent,
+  bottomComponent,
   compact = false, // New prop for extra compact mode
 }) => {
   const insets = useSafeAreaInsets();
@@ -29,7 +30,7 @@ const CustomHeader = ({
         { paddingTop: insets.top + (compact ? 8 : 16) },
       ]}
     >
-      <StatusBar barStyle="light-content" backgroundColor="#1e40af" />
+      <StatusBar barStyle="light-content" backgroundColor="#1E3A8A" />
       <View style={styles.headerContent}>
         <View style={styles.headerLeft}>
           {showBackButton && (
@@ -45,13 +46,20 @@ const CustomHeader = ({
               />
             </TouchableOpacity>
           )}
+          {showLogo && (
+            <Image
+              source={require("../../assets/images/logo-alternate.png")}
+              style={[styles.logoImage, compact && styles.logoImageCompact]}
+              resizeMode="contain"
+            />
+          )}
           <View style={styles.titleSection}>
             <Text
               style={[styles.headerTitle, compact && styles.headerTitleCompact]}
             >
               {title}
             </Text>
-            {subtitle && !compact && (
+            {subtitle && (
               <Text
                 style={[
                   styles.headerSubtitle,
@@ -65,12 +73,6 @@ const CustomHeader = ({
         </View>
 
         <View style={styles.headerRight}>
-          {showLogo && (
-            <Image
-              source={require("../../assets/images/logo-alternate.png")}
-              style={[styles.logoImage, compact && styles.logoImageCompact]}
-            />
-          )}
           {rightComponent && (
             <View style={compact && styles.rightComponentCompact}>
               {rightComponent}
@@ -78,6 +80,7 @@ const CustomHeader = ({
           )}
         </View>
       </View>
+      {bottomComponent ? <View style={styles.bottomComponent}>{bottomComponent}</View> : null}
     </View>
   );
 };
@@ -85,7 +88,7 @@ const CustomHeader = ({
 const styles = StyleSheet.create({
   // Main container - total height: ~120-130px (increased from 80-90px)
   headerContainer: {
-    backgroundColor: "#1e40af",
+    backgroundColor: "#1E3A8A",
     paddingTop: 20,
     paddingBottom: 18, // ⬅️ more vertical space
     paddingHorizontal: 20,
@@ -206,6 +209,7 @@ const styles = StyleSheet.create({
     width: 48, // Increased from 36
     height: 48,
     borderRadius: 8, // Increased from 6
+    marginRight: 12,
   },
 
   logoImageCompact: {
@@ -215,6 +219,9 @@ const styles = StyleSheet.create({
 
   rightComponentCompact: {
     transform: [{ scale: 0.95 }],
+  },
+  bottomComponent: {
+    marginTop: 12,
   },
 });
 

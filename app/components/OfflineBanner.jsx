@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -6,19 +6,18 @@ import {
   Animated,
   TouchableOpacity,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import NetInfo from "@react-native-community/netinfo";``
+import { Ionicons } from "./Icons";
+import NetInfo from "@react-native-community/netinfo";
 
 const OfflineBanner = ({ onRefresh }) => {
   const [isConnected, setIsConnected] = useState(true);
-  const fadeAnim = new Animated.Value(0);
-  const slideAnim = new Animated.Value(-30);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(-30)).current;
 
   useEffect(() => {
     // Subscribe to network state updates
     const unsubscribe = NetInfo.addEventListener((state) => {
-      // setIsConnected(state.isConnected && state.isInternetReachable);
-      setIsConnected(false);
+      setIsConnected(Boolean(state.isConnected) && state.isInternetReachable !== false);
     });
 
     // Cleanup subscription on unmount

@@ -17,6 +17,7 @@ export default {
     },
 
     android: {
+      usesCleartextTraffic: true,
       config: {
         googleMaps: {
           apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
@@ -46,7 +47,26 @@ export default {
           backgroundColor: "#ffffff"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          locationWhenInUsePermission: "Allow SafeTap to use your location for nearby police stations and emergency reports."
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          contactsPermission: "Allow SafeTap to import or save emergency and police contacts when you request it."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          photosPermission: "Allow SafeTap to attach a selected photo as evidence to your report.",
+          cameraPermission: "Allow SafeTap to take a photo to attach as evidence to your report."
+        }
+      ]
     ],
 
     experiments: {
@@ -54,6 +74,7 @@ export default {
     },
 
     extra: {
+      apiUrl: process.env.EXPO_PUBLIC_API_URL,
       router: {
         origin: false
       },

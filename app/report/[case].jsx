@@ -10,16 +10,18 @@ import {
   Image,
   StyleSheet,
   StatusBar,
+  Linking,
 } from "react-native";
-import { FontAwesome5, Ionicons } from "@expo/vector-icons";
+import { Ionicons } from "../components/Icons";
 import { Picker } from "@react-native-picker/picker";
 import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
 import * as Clipboard from "expo-clipboard";
 import * as SecureStore from 'expo-secure-store';
-import pb from "../../lib/connection";
+import api from "../../lib/connection";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const priorities = [
   { label: "Low", value: "green" },
@@ -28,6 +30,7 @@ const priorities = [
 ];
 
 const Case = () => {
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   const [formData, setFormData] = useState({
     description: "",
@@ -62,40 +65,22 @@ const Case = () => {
   }, []);
 
   useEffect(() => {
-    const requestPermissions = async () => {
-      // Request location permission
-      let { status: locationStatus } = await Location.requestForegroundPermissionsAsync();
-      if (locationStatus !== "granted") {
-        Alert.alert(
-          "Location Permission",
-          "Location permission is required for accurate emergency response.",
-          [
-            { text: "Cancel", style: "cancel" },
-            { text: "Settings", onPress: () => Linking.openSettings() }
-          ]
-        );
-      } else {
-        const userLocation = await Location.getCurrentPositionAsync({});
+    const loadOptionalLocation = async () => {
+      try {
+        const permission = await Location.requestForegroundPermissionsAsync();
+        if (permission.status !== "granted") return;
+        const servicesEnabled = await Location.hasServicesEnabledAsync();
+        if (!servicesEnabled) return;
+        const userLocation = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
         setLocation(userLocation.coords);
-      }
-
-      // Request camera/media permissions
-      const { status: mediaStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
-      
-      if (mediaStatus !== 'granted' || cameraStatus !== 'granted') {
-        Alert.alert(
-          "Camera Permission",
-          "We need permissions to access your camera and photos for evidence.",
-          [
-            { text: "Cancel", style: "cancel" },
-            { text: "Settings", onPress: () => Linking.openSettings() }
-          ]
-        );
+      } catch (error) {
+        console.warn("Optional report location unavailable", error);
       }
     };
 
-    requestPermissions();
+    loadOptionalLocation();
   }, []);
 
   const validate = () => {
@@ -106,26 +91,43 @@ const Case = () => {
   };
 
   const handleImageAction = async (useCamera = false) => {
-    let result;
-    
-    if (useCamera) {
-      result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-      });
-    } else {
-      result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-      });
-    }
+    try {
+      const permission = useCamera
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-    if (!result.canceled && result.assets?.length > 0) {
-      setImageUri(result.assets[0].uri);
+      if (permission.status !== "granted") {
+        Alert.alert(
+          useCamera ? "Camera Access Off" : "Photo Access Off",
+          `You can submit the report without a photo. To attach one, allow ${useCamera ? "camera" : "photo library"} access.`,
+          [
+            { text: "Continue Without Photo", style: "cancel" },
+            ...(!permission.canAskAgain ? [{ text: "Open Settings", onPress: () => Linking.openSettings() }] : []),
+          ]
+        );
+        return;
+      }
+
+      const result = useCamera
+        ? await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      })
+        : await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets?.length > 0) {
+        setImageUri(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error("Image picker error", error);
+      Alert.alert("Photo Unavailable", "The photo could not be opened. You can continue without attaching one.");
     }
   };
 
@@ -161,7 +163,7 @@ const Case = () => {
         });
       }
 
-      const record = await pb.collection("cases").create(data);
+      const record = await api.collection("cases").create(data);
       setCaseId(record.id);
       setSuccess(true);
   
@@ -213,7 +215,7 @@ const Case = () => {
         { text: "Cancel", style: "cancel" },
         { 
           text: "Go to Settings", 
-          onPress: () => router.push("/about")
+          onPress: () => router.push("/(tabs)/about")
         }
       ]
     );
@@ -221,12 +223,12 @@ const Case = () => {
 
   if (success) {
     return (
-      <View style={styles.successContainer}>
+      <View style={[styles.successContainer, { paddingBottom: insets.bottom }]}>
         <Stack.Screen options={{ headerShown: false }} />
         <StatusBar barStyle="dark-content" backgroundColor="#f8fafc" />
         
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
           <View style={styles.headerContent}>
             <Text style={styles.headerTitle}>
               Report Submitted
@@ -253,7 +255,7 @@ const Case = () => {
 
           <View style={styles.caseIdContainer}>
             <View style={styles.caseIdHeader}>
-              <FontAwesome5 name="file-alt" size={16} color="#6B7280" />
+              <Ionicons name="file-alt" size={16} color="#6B7280" />
               <Text style={styles.caseIdLabel}>Case ID</Text>
             </View>
             <Text style={styles.caseIdText}>{caseId}</Text>
@@ -264,7 +266,7 @@ const Case = () => {
               style={[styles.button, styles.primaryButton]}
               onPress={copyToClipboard}
             >
-              <FontAwesome5 name="copy" size={16} color="#FFFFFF" />
+              <Ionicons name="copy" size={16} color="#FFFFFF" />
               <Text style={styles.buttonText}>Copy Case ID</Text>
             </TouchableOpacity>
 
@@ -272,7 +274,7 @@ const Case = () => {
               style={[styles.button, styles.secondaryButton]}
               onPress={() => setSuccess(false)}
             >
-              <FontAwesome5 name="plus" size={16} color="#1E3A8A" />
+              <Ionicons name="plus" size={16} color="#1E3A8A" />
               <Text style={styles.secondaryButtonText}>Submit Another Report</Text>
             </TouchableOpacity>
           </View>
@@ -282,12 +284,12 @@ const Case = () => {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <Stack.Screen options={{ headerShown: false }} />
-      <StatusBar barStyle="dark-content" backgroundColor="#1E3A8A" />
+      <StatusBar barStyle="light-content" backgroundColor="#1E3A8A" />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity 
           style={styles.backButton}
           onPress={() => router.back()}
@@ -384,7 +386,7 @@ const Case = () => {
                   style={styles.imageButton}
                   onPress={() => handleImageAction(false)}
                 >
-                  <FontAwesome5 name="image" size={18} color="#6B7280" />
+                  <Ionicons name="image" size={18} color="#6B7280" />
                   <Text style={styles.imageButtonText}>Choose Photo</Text>
                 </TouchableOpacity>
                 
@@ -392,7 +394,7 @@ const Case = () => {
                   style={styles.imageButton}
                   onPress={() => handleImageAction(true)}
                 >
-                  <FontAwesome5 name="camera" size={18} color="#6B7280" />
+                  <Ionicons name="camera" size={18} color="#6B7280" />
                   <Text style={styles.imageButtonText}>Take Photo</Text>
                 </TouchableOpacity>
               </View>
@@ -435,7 +437,7 @@ const Case = () => {
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
                 <>
-                  <FontAwesome5
+                  <Ionicons
                     name="paper-plane"
                     size={16}
                     color="#FFFFFF"
@@ -463,7 +465,7 @@ const styles = StyleSheet.create({
   // Header Styles
   header: {
     backgroundColor: "#1E3A8A",
-    paddingTop: 50,
+    paddingTop: 12,
     paddingBottom: 16,
     paddingHorizontal: 16,
     flexDirection: "row",

@@ -2,6 +2,8 @@ import { View, TextInput, Button, Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { useState } from "react";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
 
 export default function Initial() {
   const [phone, setPhone] = useState("");
@@ -17,7 +19,8 @@ export default function Initial() {
   };
 
   return (
-    <View style={{ flex: 1, justifyContent: "center", padding: 20 }}>
+    <SafeAreaView style={{ flex: 1, justifyContent: "center", padding: 20 }}>
+      <StatusBar style="dark" backgroundColor="#FFFFFF" />
       <TextInput
         placeholder="Enter phone number"
         keyboardType="phone-pad"
@@ -31,6 +34,6 @@ export default function Initial() {
         }}
       />
       <Button title="Continue" onPress={savePhone} />
-    </View>
+    </SafeAreaView>
   );
 }

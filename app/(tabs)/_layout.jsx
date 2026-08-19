@@ -1,9 +1,8 @@
 import React from "react";
 import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { Platform, View, StyleSheet } from "react-native";
-import { BlurView } from "expo-blur";
+import { Ionicons } from "../components/Icons";
+import { View, StyleSheet } from "react-native";
 import "../global.css";
 import { StatusBar } from "expo-status-bar";
 
@@ -12,30 +11,20 @@ export default function RootLayout() {
 
   return (
     <View style={styles.container}>
-      <StatusBar style="light"/>
+      <StatusBar style="light" backgroundColor="#1E3A8A" />
       <Tabs
         screenOptions={{
           headerShown: false,
           tabBarStyle: {
-            backgroundColor: "transparent",
+            backgroundColor: "#FFFFFF",
             borderTopWidth: 1,
             borderTopColor: "#D1D5DB", // Light gray border (hex value)
 
-            height: Platform.select({
-              ios: 70 + (insets.bottom > 0 ? insets.bottom - 20 : 0),
-              android: 70,
-            }),
+            height: 58 + insets.bottom,
             paddingTop: 0,
-            paddingBottom: Platform.select({
-              ios: insets.bottom > 0 ? insets.bottom : 16,
-              android: 12,
-            }),
+            paddingBottom: Math.max(insets.bottom, 8),
             paddingHorizontal: 0,
             marginHorizontal: 0,
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
             elevation: 0,
             shadowColor: "#000",
             shadowOffset: { width: 0, height: -2 },
@@ -61,13 +50,6 @@ export default function RootLayout() {
             paddingVertical: 4,
           },
           tabBarHideOnKeyboard: true,
-          tabBarBackground: () => (
-            <BlurView
-              intensity={100}
-              tint="light"
-              style={StyleSheet.absoluteFill}
-            />
-          ),
         }}
       >
         <Tabs.Screen
@@ -77,7 +59,7 @@ export default function RootLayout() {
             tabBarIcon: ({ focused, color, size }) => (
               <Ionicons
                 name={focused ? "home" : "home-outline"}
-                size={size || 19}
+                size={22}
                 color={color}
               />
             ),
@@ -92,7 +74,7 @@ export default function RootLayout() {
             tabBarIcon: ({ focused, color, size }) => (
               <Ionicons
                 name={focused ? "call" : "call-outline"}
-                size={size || 19}
+                size={22}
                 color={color}
               />
             ),
@@ -105,7 +87,7 @@ export default function RootLayout() {
             tabBarIcon: ({ focused, color, size }) => (
               <Ionicons
                 name={focused ? "newspaper" : "newspaper-outline"}
-                size={size || 19}
+                size={22}
                 color={color}
               />
             ),
@@ -118,8 +100,8 @@ export default function RootLayout() {
             title: "Services",
             tabBarIcon: ({ focused, color, size }) => (
               <Ionicons
-                name={focused ? "list-circle" : "list-outline"}
-                size={size || 19}
+                name={focused ? "grid" : "grid-outline"}
+                size={22}
                 color={color}
               />
             ),
@@ -132,8 +114,8 @@ export default function RootLayout() {
             title: "About",
             tabBarIcon: ({ focused, color, size }) => (
               <Ionicons
-                name={focused ? "information-circle" : "information-circle"}
-                size={size || 19}
+                name={focused ? "information-circle" : "information-circle-outline"}
+                size={22}
                 color={color}
               />
             ),

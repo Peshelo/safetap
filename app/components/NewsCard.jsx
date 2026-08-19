@@ -7,8 +7,9 @@ import {
   ActivityIndicator,
 } from "react-native";
 import React from "react";
-import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
-import pb from "../../lib/connection";
+import { Ionicons } from "./Icons";
+import api from "../../lib/connection";
+import ArticleImage, { FALLBACK_IMAGE } from "./ArticleImage";
 
 const NewsCard = ({
   item,
@@ -24,11 +25,12 @@ const NewsCard = ({
 }) => {
   const getFileUrl = (item) => {
     if (!item.file) return null;
-    return pb.files.getURL(item, item.file);
+    return api.files.getURL(item, item.file);
   };
 
   const getFileType = (url) => {
     if (!url) return null;
+    if (item.cover_image_url) return "image";
     const extension = url.split(".").pop().toLowerCase();
     if (["jpg", "jpeg", "png", "gif", "webp"].includes(extension)) return "image";
     if (extension === "pdf") return "pdf";
@@ -42,8 +44,16 @@ const NewsCard = ({
   const getHumanFriendlyDate = (dateString) => {
     try {
       const date = new Date(dateString);
+      if (Number.isNaN(date.getTime())) return "Recently";
       const now = new Date();
-      const diffTime = Math.abs(now - date);
+      const diffTime = now - date;
+      if (diffTime < 0) {
+        return date.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+      }
       const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
       const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
       const diffMinutes = Math.floor(diffTime / (1000 * 60));
@@ -57,6 +67,7 @@ const NewsCard = ({
       return date.toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
+        ...(date.getFullYear() !== now.getFullYear() && { year: "numeric" }),
       });
     } catch (error) {
       return "Recently";
@@ -82,9 +93,9 @@ const NewsCard = ({
         style={[styles.compactCard, cardStyle]}
         activeOpacity={0.7}
       >
-        {hasFile && fileType === "image" && showImage && (
-          <Image
-            source={{ uri: fileUrl }}
+        {showImage && (
+          <ArticleImage
+            source={hasFile && fileType === "image" ? { uri: fileUrl } : FALLBACK_IMAGE}
             style={styles.compactImage}
             resizeMode="cover"
           />
@@ -126,9 +137,9 @@ const NewsCard = ({
       activeOpacity={0.7}
     >
       {/* Article Image */}
-      {hasFile && fileType === "image" && showImage && (
-        <Image
-          source={{ uri: fileUrl }}
+      {showImage && (
+        <ArticleImage
+          source={hasFile && fileType === "image" ? { uri: fileUrl } : FALLBACK_IMAGE}
           style={styles.articleImage}
           resizeMode="cover"
         />
@@ -173,7 +184,7 @@ const NewsCard = ({
           
           {hasFile && (
             <View style={styles.attachmentIndicator}>
-              <FontAwesome5 
+              <Ionicons 
                 name={fileType === "image" ? "image" : "file-pdf"} 
                 size={12} 
                 color="#6B7280" 
