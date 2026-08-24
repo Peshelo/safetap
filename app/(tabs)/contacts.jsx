@@ -18,7 +18,6 @@ import { Ionicons } from "../components/Icons";
 import api from "../../lib/connection";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Stack, useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import useNetworkStatus from "../hooks/useNetworkStatus";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -61,9 +60,6 @@ const zimbabweProvinces = {
   ],
 };
 
-const CACHE_KEY            = "emergencyContacts";
-const CACHE_TIMESTAMP_KEY  = "emergencyContactsTimestamp";
-const CACHE_EXPIRY_TIME    = 24 * 60 * 60 * 1000;
 const PAGE_SIZE            = 15;
 
 // Bottom padding: floating pill (64) + margin from bottom (14) + safe area + breathing room
@@ -99,6 +95,15 @@ const EmergencyContacts = () => {
   useEffect(() => { fetchFirstPage(); }, []);
 
   useEffect(() => {
+    if (!isOnline) return;
+    api.syncStationsForOffline()
+      .then((all) => {
+        if (!hasActiveFilters && usingCachedData && all.length) fetchFirstPage();
+      })
+      .catch((error) => console.error("Station offline sync failed", error));
+  }, [isOnline]);
+
+  useEffect(() => {
     if (selectedProvince) {
       setDistricts(zimbabweProvinces[selectedProvince] || []);
       setSelectedDistrict("");
@@ -121,25 +126,8 @@ const EmergencyContacts = () => {
 
   // ─── Cache helpers ──────────────────────────────────────────────────────────
   const loadFromCache = async () => {
-    try {
-      const [raw, ts] = await Promise.all([
-        AsyncStorage.getItem(CACHE_KEY),
-        AsyncStorage.getItem(CACHE_TIMESTAMP_KEY),
-      ]);
-      if (!raw || !ts) return null;
-      const expired = Date.now() - parseInt(ts, 10) > CACHE_EXPIRY_TIME;
-      if (!expired || !isOnline) return JSON.parse(raw);
-      return null;
-    } catch { return null; }
-  };
-
-  const saveToCache = async (data) => {
-    try {
-      await AsyncStorage.multiSet([
-        [CACHE_KEY, JSON.stringify(data)],
-        [CACHE_TIMESTAMP_KEY, Date.now().toString()],
-      ]);
-    } catch (e) { console.error("Cache save error", e); }
+    const stations = await api.getCachedStations();
+    return stations.length ? stations : null;
   };
 
   // ─── Save ALL contacts offline ──────────────────────────────────────────────
@@ -151,8 +139,7 @@ const EmergencyContacts = () => {
     try {
       setSavingAll(true);
       // Fetch every record (no pagination limit)
-      const all = await api.collection("contacts").getFullList({ sort: "station" });
-      await saveToCache(all);
+      const all = await api.syncStationsForOffline(true);
       Alert.alert(
         "Saved Offline",
         `${all.length} police stations saved. You can now browse them without internet.`
@@ -174,8 +161,9 @@ const EmergencyContacts = () => {
       const t = searchQuery.toLowerCase();
       data = data.filter(c =>
         c.station?.toLowerCase().includes(t) ||
-        c.member_in_charge?.toLowerCase().includes(t) ||
-        c.specialty?.toLowerCase().includes(t)
+        c.phone?.toLowerCase().includes(t) ||
+        c.district?.toLowerCase().includes(t) ||
+        c.province?.toLowerCase().includes(t)
       );
     }
     if (province) data = data.filter(c => c.province === province);
@@ -192,7 +180,7 @@ const EmergencyContacts = () => {
       if (isOnline) {
         try {
           const filters = [];
-          if (searchQuery) filters.push(`(station~"${searchQuery}" || member_in_charge~"${searchQuery}" || specialty~"${searchQuery}")`);
+          if (searchQuery) filters.push(`station~"${searchQuery}"`);
           if (province)     filters.push(`province="${province}"`);
           if (district)     filters.push(`district="${district.toUpperCase()}"`);
 
@@ -219,10 +207,6 @@ const EmergencyContacts = () => {
       setHasMore(items.length >= PAGE_SIZE && (resultList.totalItems ?? 0) > PAGE_SIZE);
       setUsingCachedData(fromCache);
 
-      // Auto-cache first page when doing a clean unfiltered fetch
-      if (isOnline && !fromCache && !searchQuery && !province && !district && items.length > 0) {
-        await saveToCache(items);
-      }
     } catch (e) {
       console.error("fetchFirstPage error:", e);
       setContacts([]);
@@ -243,7 +227,7 @@ const EmergencyContacts = () => {
       if (hasActiveFilters) {
         if (isOnline && !usingCachedData) {
           const filters = [];
-          if (searchTerm) filters.push(`(station~"${searchTerm}" || member_in_charge~"${searchTerm}" || specialty~"${searchTerm}")`);
+          if (searchTerm) filters.push(`station~"${searchTerm}"`);
           if (selectedProvince) filters.push(`province="${selectedProvince}"`);
           if (selectedDistrict) filters.push(`district="${selectedDistrict.toUpperCase()}"`);
           const result = await api.collection("contacts").getList(nextPage, PAGE_SIZE, {
@@ -331,11 +315,11 @@ const EmergencyContacts = () => {
           station: item.station,
           province: item.province,
           district: item.district,
-          station_number: item.station_number,
+          phone: item.phone,
           whatsapp_number: item.whatsapp_number,
-          member_in_charge: formatText(item.member_in_charge),
-          member_in_charge_number: item.member_in_charge_number,
-          specialty: formatText(item.specialty),
+          address: item.address,
+          latitude: item.latitude,
+          longitude: item.longitude,
         },
       })}
       activeOpacity={0.8}
@@ -351,9 +335,6 @@ const EmergencyContacts = () => {
         <Text style={styles.locationText} numberOfLines={1}>
           {formatText(item.district, true)}, {formatText(item.province)}
         </Text>
-        {item.member_in_charge && (
-          <Text style={styles.inChargeText} numberOfLines={1}>{formatText(item.member_in_charge)}</Text>
-        )}
       </View>
       <Ionicons name="chevron-forward" size={18} color="#CBD5E0" />
     </TouchableOpacity>
@@ -563,7 +544,7 @@ const EmergencyContacts = () => {
                 tintColor="#1E3A8A"
               />
             }
-            contentContainerStyle={{ paddingBottom: listBottomPadding }}
+            contentContainerStyle={{ width: "100%", maxWidth: 900, alignSelf: "center", paddingBottom: listBottomPadding }}
           />
         )}
       </View>
@@ -627,7 +608,7 @@ const styles = StyleSheet.create({
   // ── Container ────────────────────────────────────────────────────────────────
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F6F7F9",
   },
 
   // ── Status strip ─────────────────────────────────────────────────────────────
@@ -765,12 +746,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     marginBottom: 2,
   },
-  inChargeText: {
-    fontSize: 11.5,
-    color: "#1E3A8A",
-    fontStyle: "italic",
-  },
-
   // ── States ───────────────────────────────────────────────────────────────────
   centered: {
     flex: 1,

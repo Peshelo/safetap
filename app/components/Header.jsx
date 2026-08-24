@@ -1,13 +1,5 @@
 import React from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  StatusBar,
-  Platform,
-  Image,
-} from "react-native";
+import { Image, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -19,31 +11,17 @@ const CustomHeader = ({
   showLogo = false,
   rightComponent,
   bottomComponent,
-  compact = false, // New prop for extra compact mode
+  compact = false,
 }) => {
   const insets = useSafeAreaInsets();
-
   return (
-    <View
-      style={[
-        styles.headerContainer,
-        { paddingTop: insets.top + (compact ? 8 : 16) },
-      ]}
-    >
+    <View style={[styles.headerContainer, { paddingTop: insets.top + 8 }]}>
       <StatusBar barStyle="light-content" backgroundColor="#1E3A8A" />
       <View style={styles.headerContent}>
         <View style={styles.headerLeft}>
           {showBackButton && (
-            <TouchableOpacity
-              onPress={onBack}
-              style={styles.backButton}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons
-                name="arrow-back"
-                size={compact ? 26 : 28}
-                color="#fff"
-              />
+            <TouchableOpacity onPress={onBack} style={styles.backButton} hitSlop={10}>
+              <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
             </TouchableOpacity>
           )}
           {showLogo && (
@@ -54,31 +32,11 @@ const CustomHeader = ({
             />
           )}
           <View style={styles.titleSection}>
-            <Text
-              style={[styles.headerTitle, compact && styles.headerTitleCompact]}
-            >
-              {title}
-            </Text>
-            {subtitle && (
-              <Text
-                style={[
-                  styles.headerSubtitle,
-                  compact && styles.headerSubtitleCompact,
-                ]}
-              >
-                {subtitle}
-              </Text>
-            )}
+            <Text numberOfLines={1} style={[styles.headerTitle, compact && styles.headerTitleCompact]}>{title}</Text>
+            {subtitle ? <Text numberOfLines={1} style={styles.headerSubtitle}>{subtitle}</Text> : null}
           </View>
         </View>
-
-        <View style={styles.headerRight}>
-          {rightComponent && (
-            <View style={compact && styles.rightComponentCompact}>
-              {rightComponent}
-            </View>
-          )}
-        </View>
+        {rightComponent ? <View style={styles.headerRight}>{rightComponent}</View> : null}
       </View>
       {bottomComponent ? <View style={styles.bottomComponent}>{bottomComponent}</View> : null}
     </View>
@@ -86,174 +44,35 @@ const CustomHeader = ({
 };
 
 const styles = StyleSheet.create({
-  // Main container - total height: ~120-130px (increased from 80-90px)
   headerContainer: {
     backgroundColor: "#1E3A8A",
-    paddingTop: 20,
-    paddingBottom: 18, // ⬅️ more vertical space
-    paddingHorizontal: 20,
-    minHeight: Platform.select({
-      ios: 120, // ⬅️ BIG difference
-      android: 120,
-    }),
-    justifyContent: "flex-end", // ⬅️ pushes content down
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 6,
-  },
-
-  // Content layout
-  headerContent: {
-    flexDirection: "row",
-    alignItems: "flex-end", // ⬅️ bottom-aligned like the screenshot
-    justifyContent: "space-between",
-  },
-
-  // Left side
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-    minHeight: Platform.select({
-      ios: 56, // Increased from 44
-      android: 64, // Increased from 56
-    }),
-  },
-
-  backButton: {
-    marginRight: 16, // Increased from 8
-    width: 48, // Increased from 40
-    height: 48,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  titleSection: {
-    flex: 1,
-    justifyContent: "center",
-    minHeight: Platform.select({
-      ios: 56,
-      android: 64,
-    }),
-  },
-
-  // Title styles - larger sizing
-  headerTitle: {
-    fontSize: Platform.select({
-      ios: 22, // Increased from 17
-      android: 22, // Increased from 18
-      default: 22,
-    }),
-    fontWeight: Platform.select({
-      ios: "700", // Increased from 600
-      android: "800", // Increased from 700
-      default: "700",
-    }),
-    color: "#fff",
-    lineHeight: 36, // Increased from 22
-    letterSpacing: Platform.select({
-      ios: -0.41,
-      android: 0,
-      default: 0,
-    }),
-  },
-
-  headerTitleCompact: {
-    fontSize: Platform.select({
-      ios: 20, // Increased from 16
-      android: 22, // Increased from 17
-      default: 20,
-    }),
-    lineHeight: 26, // Increased from 20
-  },
-
-  // Subtitle styles - larger
-  headerSubtitle: {
-    fontSize: Platform.select({
-      ios: 16, // Increased from 12
-      android: 17, // Increased from 13
-      default: 16,
-    }),
-    color: "#dbeafe",
-    opacity: 0.9,
-    marginTop: 6, // Increased from 2
-    lineHeight: 20, // Increased from 16
-    letterSpacing: Platform.select({
-      ios: -0.24,
-      android: 0,
-      default: 0,
-    }),
-  },
-
-  headerSubtitleCompact: {
-    fontSize: 14, // Increased from 11
-    lineHeight: 18, // Increased from 14
-    marginTop: 4, // Increased from 1
-  },
-
-  // Right side
-  headerRight: {
-    flexDirection: "row",
-    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+    minHeight: 96,
     justifyContent: "flex-end",
-    minHeight: Platform.select({
-      ios: 56,
-      android: 64,
-    }),
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(255,255,255,0.16)",
   },
-
-  // Logo - larger
-  logoImage: {
-    width: 48, // Increased from 36
-    height: 48,
-    borderRadius: 8, // Increased from 6
-    marginRight: 12,
-  },
-
-  logoImageCompact: {
-    width: 42, // Increased from 32
-    height: 42,
-  },
-
-  rightComponentCompact: {
-    transform: [{ scale: 0.95 }],
-  },
-  bottomComponent: {
-    marginTop: 12,
-  },
+  headerContent: { width: "100%", maxWidth: 900, alignSelf: "center", minHeight: 50, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  headerLeft: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center" },
+  backButton: { width: 40, height: 40, marginRight: 8, alignItems: "center", justifyContent: "center" },
+  logoImage: { width: 40, height: 40, borderRadius: 8, marginRight: 10 },
+  logoImageCompact: { width: 38, height: 38 },
+  titleSection: { flex: 1, minWidth: 0, justifyContent: "center" },
+  headerTitle: { color: "#FFFFFF", fontFamily: "GoogleSans_700Bold", fontSize: 20, lineHeight: 25, letterSpacing: -0.25 },
+  headerTitleCompact: { fontSize: 19, lineHeight: 24 },
+  headerSubtitle: { color: "#DBEAFE", fontFamily: "GoogleSans_400Regular", fontSize: 12, lineHeight: 16, marginTop: 2, opacity: 0.88 },
+  headerRight: { minHeight: 44, marginLeft: 10, flexDirection: "row", alignItems: "center", justifyContent: "flex-end" },
+  bottomComponent: { width: "100%", maxWidth: 900, alignSelf: "center", marginTop: 10 },
 });
 
-// Export additional presets for common use cases
 export const HeaderPresets = {
-  // Standard header with subtitle (larger)
-  standard: {
-    compact: false,
-  },
-  // Compact header for content-heavy screens
-  compact: {
-    compact: true,
-  },
-  // Modal header (taller for modal presentations)
-  modal: {
-    compact: false,
-  },
-  // Tab header (for tab screens)
-  tab: {
-    compact: true,
-    showLogo: true,
-  },
-  // Extra large header for important pages
-  large: {
-    compact: false,
-  },
+  standard: { compact: false }, compact: { compact: true }, modal: { compact: false },
+  tab: { compact: true, showLogo: true }, large: { compact: false },
 };
 
-// Helper function to use presets
-export const createHeaderProps = (preset = "standard", overrides = {}) => {
-  const baseProps = HeaderPresets[preset] || HeaderPresets.standard;
-  return { ...baseProps, ...overrides };
-};
+export const createHeaderProps = (preset = "standard", overrides = {}) => ({
+  ...(HeaderPresets[preset] || HeaderPresets.standard), ...overrides,
+});
 
 export default CustomHeader;

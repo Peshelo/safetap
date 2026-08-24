@@ -68,8 +68,8 @@ const styles = StyleSheet.create({
   root: { flex: 1, justifyContent: "flex-end" },
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(15, 23, 42, 0.48)" },
   sheet: {
-    maxHeight: "90%", backgroundColor: "#FFFFFF", borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.18, shadowRadius: 12, elevation: 20,
+    maxHeight: "90%", backgroundColor: "#FFFFFF", borderTopLeftRadius: 18, borderTopRightRadius: 18,
+    shadowColor: "#000", shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 16,
   },
   handleArea: { height: 30, alignItems: "center", justifyContent: "center" },
   handle: { width: 42, height: 5, borderRadius: 3, backgroundColor: "#CBD5E1" },

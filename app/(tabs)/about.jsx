@@ -198,7 +198,7 @@ const About = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#F6F7F9",
   },
   // Header matching other pages
   header: {
@@ -230,14 +230,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
+    width: "100%",
+    maxWidth: 900,
+    alignSelf: "center",
     paddingBottom: 20,
   },
   section: {
     backgroundColor: "#FFFFFF",
-    marginTop: 8,
-    marginBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 12,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#E8EAED",
   },
   sectionTitle: {
     fontSize: 16,

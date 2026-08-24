@@ -503,6 +503,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
+    width: "100%",
+    maxWidth: 900,
+    alignSelf: "center",
     paddingBottom: 20,
   },
   // Phone Info Section

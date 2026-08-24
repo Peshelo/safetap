@@ -11,8 +11,16 @@ import {
   RefreshControl,
   Dimensions,
   ImageBackground,
+  TextInput,
 } from "react-native";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import Animated, {
+  Extrapolation,
+  interpolate,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+} from "react-native-reanimated";
 import { router } from "expo-router";
 import { Ionicons } from "../components/Icons";
 import api from "../../lib/connection";
@@ -55,11 +63,37 @@ const Home = () => {
   const [loading, setLoading] = useState(false);
   const [newsArticles, setNewsArticles] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [showComingSoon, setShowComingSoon] = useState(false);
-  const [comingSoonTitle, setComingSoonTitle] = useState("");
+  const [stationQuery, setStationQuery] = useState("");
+  const [stationResults, setStationResults] = useState([]);
+  const [searchingStations, setSearchingStations] = useState(false);
+  const [nearbyStations, setNearbyStations] = useState([]);
+  const stationSearchTimer = useRef(null);
+  const scrollY = useSharedValue(0);
+
+  const scrollHandler = useAnimatedScrollHandler((event) => {
+    scrollY.value = event.contentOffset.y;
+  });
+  const discoveryPanelAnimatedStyle = useAnimatedStyle(() => ({
+    paddingTop: interpolate(scrollY.value, [0, 120], [14, 8], Extrapolation.CLAMP),
+    paddingBottom: interpolate(scrollY.value, [0, 120], [22, 10], Extrapolation.CLAMP),
+  }));
+  const discoveryIntroAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [0, 65], [1, 0], Extrapolation.CLAMP),
+    maxHeight: interpolate(scrollY.value, [0, 100], [88, 0], Extrapolation.CLAMP),
+    transform: [{ translateY: interpolate(scrollY.value, [0, 100], [0, -8], Extrapolation.CLAMP) }],
+  }));
+  const searchAnimatedStyle = useAnimatedStyle(() => ({
+    marginTop: interpolate(scrollY.value, [0, 100], [18, 0], Extrapolation.CLAMP),
+  }));
+  const actionsAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [0, 70], [1, 0], Extrapolation.CLAMP),
+    maxHeight: interpolate(scrollY.value, [0, 110], [78, 0], Extrapolation.CLAMP),
+    marginTop: interpolate(scrollY.value, [0, 110], [20, 0], Extrapolation.CLAMP),
+    transform: [{ translateY: interpolate(scrollY.value, [0, 110], [0, -10], Extrapolation.CLAMP) }],
+  }));
 
   // Notice banner text — edit as needed
-  const noticeBanner = "NOTICE: Please report any suspicious activity to your nearest police station immediately. Stay safe.";
+  const noticeBanner = "ZRP PURSUING INNOVATIVE POLICING FOR SAFE COMMUNITIES TOWARDS VISION 2030";
 
   const fetchNewsArticles = async () => {
     try {
@@ -77,6 +111,61 @@ const Home = () => {
   useEffect(() => {
     fetchNewsArticles();
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const fetchNearbyStations = async () => {
+      try {
+        const permission = await Location.requestForegroundPermissionsAsync();
+        if (permission.status !== "granted") return;
+        const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const payload = await api.nearbyStations(location.coords.latitude, location.coords.longitude, 50, 1, 3);
+        const stations = (payload.items || []).slice(0, 3).map((station) => ({
+          ...station,
+          station: station.station || station.name || "Police Station",
+          phone: station.phone,
+          whatsapp_number: station.whatsapp_number || station.whatsapp,
+          distance: station.distance_km,
+        }));
+        if (active) setNearbyStations(stations);
+      } catch (error) {
+        console.error("Home nearby stations error", error);
+      }
+    };
+    fetchNearbyStations();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    clearTimeout(stationSearchTimer.current);
+    const query = stationQuery.trim();
+    if (query.length < 2) {
+      setStationResults([]);
+      setSearchingStations(false);
+      return undefined;
+    }
+    setSearchingStations(true);
+    stationSearchTimer.current = setTimeout(async () => {
+      try {
+        const result = await api.collection("contacts").getList(1, 5, {
+          filter: `(station~"${query.replace(/"/g, "")}")`,
+        });
+        setStationResults(result.items || []);
+      } catch (error) {
+        console.error("Home station search error", error);
+        const cached = await api.getCachedStations();
+        const term = query.toLowerCase();
+        setStationResults(cached.filter((station) =>
+          station.station?.toLowerCase().includes(term) ||
+          station.district?.toLowerCase().includes(term) ||
+          station.province?.toLowerCase().includes(term)
+        ).slice(0, 5));
+      } finally {
+        setSearchingStations(false);
+      }
+    }, 350);
+    return () => clearTimeout(stationSearchTimer.current);
+  }, [stationQuery]);
 
   const makeEmergencyCall = (number) => {
     Linking.openURL(`tel:${number}`).catch(() =>
@@ -97,14 +186,24 @@ const Home = () => {
     fetchNewsArticles();
   };
 
-  const showComingSoonAlert = (title) => {
-    setComingSoonTitle(title);
-    setShowComingSoon(true);
-  };
+  const openStation = (station) => router.push({
+    pathname: "/contactDetails",
+    params: {
+      id: station.id,
+      station: station.station,
+      province: station.province,
+      district: station.district,
+      phone: station.phone,
+      whatsapp_number: station.whatsapp_number,
+      address: station.address,
+      latitude: station.latitude,
+      longitude: station.longitude,
+    },
+  });
 
   const quickActions = [
     {
-      title: "Press Release",
+      title: "News & Press Releases",
       subtitle: "Latest news & press releases",
       icon: "newspaper",
       action: () => router.push("/(tabs)/news"),
@@ -124,13 +223,6 @@ const Home = () => {
       icon: "search",
       available: true,
       action: () => router.push("/(tabs)/services"),
-    },
-    {
-      title: "Report Follow-up",
-      description: "Track your report status",
-      icon: "clipboard-check",
-      available: false,
-      action: () => showComingSoonAlert("Police Report Follow-up"),
     },
     {
       title: "ZRP on Social Media",
@@ -192,9 +284,12 @@ const Home = () => {
         )}
       />
 
-      <ScrollView
+      <Animated.ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
+        stickyHeaderIndices={[0]}
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -205,6 +300,82 @@ const Home = () => {
         }
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.stickyDiscoveryWrapper}>
+        <Animated.View style={[styles.discoveryPanel, discoveryPanelAnimatedStyle]}>
+          <Animated.View style={[styles.discoveryAnimatedClip, discoveryIntroAnimatedStyle]}>
+            <Text style={styles.discoveryEyebrow}>POLICE STATION DIRECTORY</Text>
+            <Text style={styles.discoveryTitle}>Find a police station</Text>
+            <Text style={styles.discoverySubtitle}>Search verified station contacts available in SafeTap.</Text>
+          </Animated.View>
+
+          <Animated.View style={[styles.stationSearchBox, searchAnimatedStyle]}>
+            <Ionicons name="search-outline" size={19} color="#64748B" />
+            <TextInput
+              value={stationQuery}
+              onChangeText={setStationQuery}
+              placeholder="Search police stations"
+              placeholderTextColor="#94A3B8"
+              style={styles.stationSearchInput}
+              returnKeyType="search"
+            />
+            {searchingStations ? <ActivityIndicator size="small" color={COLORS.navy} /> : stationQuery ? (
+              <TouchableOpacity onPress={() => setStationQuery("")}><Ionicons name="close-circle" size={19} color="#94A3B8" /></TouchableOpacity>
+            ) : null}
+          </Animated.View>
+
+          {stationQuery.trim().length >= 2 && !searchingStations && (
+            <View style={styles.stationResults}>
+              {stationResults.length ? stationResults.map((station, index) => (
+                <TouchableOpacity key={station.id || index} style={[styles.stationResult, index < stationResults.length - 1 && styles.stationResultBorder]} onPress={() => openStation(station)}>
+                  <View style={styles.stationResultIcon}><Ionicons name="business-outline" size={17} color={COLORS.navy} /></View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.stationResultName} numberOfLines={1}>{station.station}</Text>
+                    <Text style={styles.stationResultLocation} numberOfLines={1}>{[station.district, station.province].filter(Boolean).join(", ")}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={17} color="#94A3B8" />
+                </TouchableOpacity>
+              )) : <Text style={styles.noStationResults}>No matching station found</Text>}
+            </View>
+          )}
+
+          {/* <Animated.View style={[styles.discoveryActions, styles.discoveryAnimatedClip, actionsAnimatedStyle]}>
+            {[
+              { label: "Stations Directory", icon: "list", action: () => router.push("/(tabs)/contacts") },
+              { label: "Stations Near Me", icon: "map-outline", action: () => router.push("/maps") },
+              { label: "Services", icon: "grid-outline", action: () => router.push("/(tabs)/services") },
+            ].map((item) => (
+              <TouchableOpacity key={item.label} style={styles.discoveryAction} onPress={item.action}>
+                <View style={styles.discoveryActionIcon}><Ionicons name={item.icon} size={22} color="#FFFFFF" /></View>
+                <Text style={styles.discoveryActionText}>{item.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </Animated.View> */}
+        </Animated.View>
+        </View>
+
+        {/* {nearbyStations.length > 0 && <View style={styles.nearbySection}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="location-outline" size={15} color={COLORS.navy} />
+              <Text style={styles.sectionTitle}>Stations near you</Text>
+            </View>
+            <TouchableOpacity onPress={() => router.push("/maps")}><Text style={styles.viewAll}>View map</Text></TouchableOpacity>
+          </View>
+          <View style={styles.nearbyCard}>
+            {nearbyStations.map((station, index) => (
+              <TouchableOpacity key={station.id || index} style={[styles.nearbyRow, index < nearbyStations.length - 1 && styles.stationResultBorder]} onPress={() => openStation(station)}>
+                <View style={styles.stationResultIcon}><Ionicons name="business-outline" size={17} color={COLORS.navy} /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.stationResultName} numberOfLines={1}>{station.station}</Text>
+                  <Text style={styles.stationResultLocation} numberOfLines={1}>{station.address || [station.district, station.province].filter(Boolean).join(", ")}</Text>
+                </View>
+                {Number.isFinite(Number(station.distance)) && <Text style={styles.distanceText}>{Number(station.distance).toFixed(1)} km</Text>}
+                <Ionicons name="chevron-forward" size={17} color={COLORS.textLight} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>} */}
+
         {/* Notice Banner */}
         <View style={styles.noticeBanner}>
           <Ionicons name="bullhorn" size={13} color={COLORS.navy} style={{ marginRight: 8, marginTop: 1 }} />
@@ -269,6 +440,7 @@ const Home = () => {
           </View>
 
           {/* Emergency call cards */}
+          <View style={styles.contactActionGrid}>
           <View style={styles.emergencyGrid}>
             {emergencyContacts.map((contact, index) => (
               <TouchableOpacity
@@ -291,11 +463,6 @@ const Home = () => {
 
           {/* WhatsApp — separate, distinct card */}
           <View style={styles.whatsappSection}>
-            <View style={styles.whatsappLabelRow}>
-              <View style={styles.whatsappDivider} />
-              <Text style={styles.whatsappLabel}>Chat & Messaging</Text>
-              <View style={styles.whatsappDivider} />
-            </View>
             <TouchableOpacity
               onPress={() => openWhatsApp("+263712800197")}
               style={styles.whatsappCard}
@@ -312,6 +479,7 @@ const Home = () => {
                 <Ionicons name="arrow-forward" size={14} color="#25D366" />
               </View>
             </TouchableOpacity>
+          </View>
           </View>
         </View>
 
@@ -374,15 +542,16 @@ const Home = () => {
                     style={styles.newsImage}
                   />
                   <View style={styles.newsContent}>
-                    <Text style={styles.newsDate}>
-                      {formatArticleDate(item.created)}
-                    </Text>
+                    <View style={styles.homeNewsMeta}>
+                      <Text style={styles.newsDate}>{formatArticleDate(item.created)}</Text>
+                    </View>
                     <Text style={styles.newsTitle} numberOfLines={2}>{item.title}</Text>
                     {item.description && (
                       <Text style={styles.newsDesc} numberOfLines={2}>
                         {item.description.replace(/<[^>]*>/g, "")}
                       </Text>
                     )}
+                    <Text style={styles.homeNewsPublisher}>Zimbabwe Republic Police</Text>
                   </View>
                 </TouchableOpacity>
               ))}
@@ -414,10 +583,8 @@ const Home = () => {
                 style={[
                   styles.serviceRow,
                   index < policeServices.length - 1 && styles.serviceRowBorder,
-                  !service.available && { opacity: 0.5 },
                 ]}
                 activeOpacity={0.8}
-                disabled={!service.available}
               >
                 <View style={styles.serviceIconWrap}>
                   <Ionicons name={service.icon} size={14} color={service.available ? COLORS.navy : COLORS.textLight} />
@@ -426,13 +593,7 @@ const Home = () => {
                   <Text style={styles.serviceTitle}>{service.title}</Text>
                   <Text style={styles.serviceDesc}>{service.description}</Text>
                 </View>
-                {service.available ? (
-                  <Ionicons name="chevron-forward" size={15} color={COLORS.textLight} />
-                ) : (
-                  <View style={styles.soonBadge}>
-                    <Text style={styles.soonText}>Soon</Text>
-                  </View>
-                )}
+                <Ionicons name="chevron-forward" size={15} color={COLORS.textLight} />
               </TouchableOpacity>
             ))}
           </View>
@@ -445,26 +606,8 @@ const Home = () => {
             Your safety is our priority. Always know your nearest police station.
           </Text>
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
 
-      {/* Coming Soon Modal */}
-      {showComingSoon && (
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Ionicons name="time-outline" size={44} color={COLORS.yellow} style={{ marginBottom: 12 }} />
-            <Text style={styles.modalTitle}>Coming Soon</Text>
-            <Text style={styles.modalMessage}>
-              {comingSoonTitle} is currently in development and will be available soon.
-            </Text>
-            <TouchableOpacity
-              style={styles.modalButton}
-              onPress={() => setShowComingSoon(false)}
-            >
-              <Text style={styles.modalButtonText}>Got it</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
     </View>
   );
 };
@@ -472,7 +615,96 @@ const Home = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
   scrollView: { flex: 1 },
-  scrollContent: { paddingBottom: 40 },
+  scrollContent: { paddingBottom: 40, width: "100%", maxWidth: 900, alignSelf: "center" },
+  stickyDiscoveryWrapper: {
+    backgroundColor: COLORS.navy,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    overflow: "hidden",
+    zIndex: 20,
+    elevation: 8,
+  },
+
+  discoveryPanel: {
+    backgroundColor: COLORS.navy,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 22,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    zIndex: 20,
+    elevation: 8,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  discoveryEyebrow: {
+    color: "#BFDBFE",
+    fontFamily: "GoogleSans_600SemiBold",
+    fontSize: 10,
+    letterSpacing: 1.1,
+  },
+  discoveryTitle: {
+    color: "#FFFFFF",
+    fontFamily: "GoogleSans_700Bold",
+    fontSize: 26,
+    marginTop: 7,
+  },
+  discoverySubtitle: { color: "#DBEAFE", fontSize: 12.5, marginTop: 5 },
+  stationSearchBox: {
+    height: 48,
+    marginTop: 18,
+    paddingHorizontal: 13,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+  },
+  stationSearchInput: {
+    flex: 1,
+    height: 48,
+    color: COLORS.textDark,
+    fontFamily: "GoogleSans_400Regular",
+    fontSize: 14,
+    lineHeight: 20,
+    paddingTop: 0,
+    paddingBottom: 0,
+    textAlignVertical: "center",
+    includeFontPadding: false,
+  },
+  stationResults: {
+    marginTop: 10,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  stationResult: { minHeight: 58, paddingHorizontal: 12, flexDirection: "row", alignItems: "center" },
+  stationResultBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: COLORS.border },
+  stationResultIcon: { width: 34, height: 34, borderRadius: 9, backgroundColor: "#EFF6FF", alignItems: "center", justifyContent: "center", marginRight: 10 },
+  stationResultName: { color: COLORS.textDark, fontFamily: "GoogleSans_600SemiBold", fontSize: 13 },
+  stationResultLocation: { color: COLORS.textMid, fontSize: 11, marginTop: 2 },
+  noStationResults: { color: COLORS.textMid, fontSize: 12, textAlign: "center", padding: 18 },
+  discoveryActions: { flexDirection: "row", marginTop: 20 },
+  discoveryAction: { flex: 1, alignItems: "center" },
+  discoveryActionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.13)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 7,
+  },
+  discoveryActionText: { color: "#FFFFFF", fontFamily: "GoogleSans_500Medium", fontSize: 12 },
+  discoveryAnimatedClip: { overflow: "hidden" },
+  nearbySection: { paddingHorizontal: 16, paddingTop: 18 },
+  nearbyCard: { marginTop: 10, backgroundColor: COLORS.white, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: COLORS.border, overflow: "hidden" },
+  nearbyRow: { minHeight: 66, paddingHorizontal: 12, flexDirection: "row", alignItems: "center" },
+  distanceText: { color: COLORS.navy, fontFamily: "GoogleSans_500Medium", fontSize: 11, marginHorizontal: 8 },
 
   // Header
   header: {
@@ -593,10 +825,12 @@ const styles = StyleSheet.create({
   viewAll: { fontSize: 13, color: COLORS.navy, fontWeight: "600" },
 
   // Emergency
+  contactActionGrid: { flexDirection: "row", gap: 10, alignItems: "stretch" },
   emergencyGrid: {
+    flex: 1,
     flexDirection: "row",
     gap: 10,
-    marginBottom: 12,
+    marginBottom: 0,
   },
   emergencyCard: {
     flex: 1,
@@ -635,7 +869,7 @@ const styles = StyleSheet.create({
 
   // WhatsApp — separate section
   whatsappSection: {
-    marginTop: 4,
+    flex: 1,
   },
   whatsappLabelRow: {
     flexDirection: "row",
@@ -659,14 +893,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#128C7E",
     borderRadius: 12,
     padding: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+    flex: 1,
+    alignItems: "flex-start",
+    justifyContent: "flex-end",
+    gap: 5,
+    minHeight: 110,
   },
   whatsappIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 38,
+    height: 38,
+    borderRadius: 10,
     backgroundColor: "rgba(255,255,255,0.18)",
     alignItems: "center",
     justifyContent: "center",
@@ -682,6 +918,9 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.8)",
   },
   whatsappChevron: {
+    position: "absolute",
+    top: 12,
+    right: 12,
     width: 30,
     height: 30,
     borderRadius: 15,
@@ -767,8 +1006,8 @@ const styles = StyleSheet.create({
   },
   newsScrollContent: { paddingHorizontal: 16, gap: 12 },
   newsCard: {
-    width: width * 0.62,
-    borderRadius: 12,
+    width: Math.min(width * 0.62, 300),
+    borderRadius: 5,
     backgroundColor: COLORS.white,
     overflow: "hidden",
     borderWidth: 1,
@@ -776,7 +1015,9 @@ const styles = StyleSheet.create({
   },
   newsImage: { width: "100%", height: 140, resizeMode: "cover" },
   newsContent: { padding: 12 },
-  newsDate: { fontSize: 10.5, color: COLORS.textLight, marginBottom: 5 },
+  homeNewsMeta: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 7 },
+  homeNewsCategory: { fontSize: 9, color: COLORS.textMid, fontWeight: "700", letterSpacing: 0.6 },
+  newsDate: { fontSize: 10, color: COLORS.textLight },
   newsTitle: {
     fontSize: 13.5,
     fontWeight: "700",
@@ -785,6 +1026,7 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   newsDesc: { fontSize: 12, color: COLORS.textMid, lineHeight: 16 },
+  homeNewsPublisher: { fontSize: 10, color: COLORS.textMid, fontWeight: "600", marginTop: 10 },
   emptyNews: {
     padding: 24,
     alignItems: "center",
@@ -793,7 +1035,7 @@ const styles = StyleSheet.create({
 
   // Skeleton
   newsSkeletonCard: {
-    width: width * 0.62,
+    width: Math.min(width * 0.62, 300),
     backgroundColor: COLORS.white,
     borderRadius: 12,
     overflow: "hidden",

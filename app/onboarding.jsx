@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
   progressTrack: { height: 4, backgroundColor: "rgba(255,255,255,0.22)", borderRadius: 2, overflow: "hidden" },
   progressFill: { height: 4, backgroundColor: "#FBBF24", borderRadius: 2 },
   slide: { width, flex: 1, paddingHorizontal: 24, justifyContent: "center" },
-  visual: { height: 310, backgroundColor: "#EFF6FF", borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#DBEAFE" },
+  visual: { width: "100%", maxWidth: 640, alignSelf: "center", height: 310, backgroundColor: "#EFF6FF", borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#DBEAFE" },
   visualRing: { width: 190, height: 190, borderRadius: 95, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#BFDBFE" },
   mainLogo: { width: 145, height: 145 },
   iconCircle: { width: 116, height: 116, borderRadius: 58, backgroundColor: "#1E3A8A", alignItems: "center", justifyContent: "center", shadowColor: "#1E3A8A", shadowOpacity: 0.22, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 7 },

@@ -6,33 +6,68 @@ import {
   ActivityIndicator,
   Alert,
   TouchableOpacity,
-  Dimensions,
   StyleSheet,
   Linking,
   Modal,
+  FlatList,
+  useWindowDimensions,
+  Share,
 } from "react-native";
 import React, { useEffect, useState } from "react";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { Ionicons } from "../components/Icons";
-import * as Sharing from "expo-sharing";
-import * as FileSystem from "expo-file-system";
 import api from "../../lib/connection";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import ArticleImage, { FALLBACK_IMAGE } from "../components/ArticleImage";
+import CustomHeader from "../components/Header";
 
-const { width } = Dimensions.get("window");
+const articleHtmlToText = (html = "") => html
+  .replace(/<\s*br\s*\/?\s*>/gi, "\n")
+  .replace(/<\/(p|div|h[1-6]|blockquote)>/gi, "\n\n")
+  .replace(/<li[^>]*>/gi, "• ")
+  .replace(/<\/li>/gi, "\n")
+  .replace(/<[^>]*>/g, "")
+  .replace(/&nbsp;/g, " ")
+  .replace(/&amp;/g, "&")
+  .replace(/&lt;/g, "<")
+  .replace(/&gt;/g, ">")
+  .replace(/\n{3,}/g, "\n\n")
+  .trim();
+
+const ProportionalArticleImage = ({ source, style }) => {
+  const [aspectRatio, setAspectRatio] = useState(16 / 10);
+
+  useEffect(() => {
+    const uri = source && typeof source === "object" ? source.uri : null;
+    if (uri) {
+      Image.getSize(uri, (imageWidth, imageHeight) => {
+        if (imageWidth > 0 && imageHeight > 0) setAspectRatio(imageWidth / imageHeight);
+      }, () => setAspectRatio(16 / 10));
+      return;
+    }
+    const asset = Image.resolveAssetSource(source || FALLBACK_IMAGE);
+    if (asset?.width && asset?.height) setAspectRatio(asset.width / asset.height);
+  }, [source]);
+
+  return <ArticleImage source={source} style={[styles.proportionalImage, { aspectRatio }, style]} resizeMode="contain" />;
+};
 
 export default function NewsDetails() {
   const { id } = useLocalSearchParams();
   const navigation = useNavigation();
   const router = useRouter(); 
+  const { width: viewportWidth } = useWindowDimensions();
 
   const [article, setArticle] = useState(null);
   const [loading, setLoading] = useState(true);
   const [attachments, setAttachments] = useState([]);
+  const [featuredImage, setFeaturedImage] = useState(null);
   const [imageViewerVisible, setImageViewerVisible] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
+  const [viewerImages, setViewerImages] = useState([]);
+  const [viewerIndex, setViewerIndex] = useState(0);
+  const [viewerStartIndex, setViewerStartIndex] = useState(0);
 
   useEffect(() => {
     if (id) fetchArticle();
@@ -42,24 +77,26 @@ export default function NewsDetails() {
     try {
       const record = await api.collection("news").getOne(id);
       setArticle(record);
+      api.trackEvent({ event_type: "ARTICLE_VIEW", feature_name: "article_view", entity_id: record.id });
 
       const processed = [];
 
       if (record.file) {
         const url = api.files.getURL(record, record.file);
         const isImage = Boolean(record.cover_image_url) || /\.(jpg|jpeg|png|gif|webp|bmp)(?:\?|$)/i.test(record.file);
-
-        processed.push({
-          type: isImage ? "image" : "document",
-          filename: record.file,
-          url,
-        });
+        if (isImage) setFeaturedImage({ filename: record.file, url });
+        else processed.push({ type: "document", filename: record.file, url });
+      } else {
+        setFeaturedImage(null);
       }
 
       if (Array.isArray(record.attachments)) {
-        record.attachments.forEach((name) => {
-          const url = api.files.getURL(record, name);
-          const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(name);
+        record.attachments.forEach((attachment) => {
+          const source = typeof attachment === "string" ? attachment : attachment.url;
+          if (!source) return;
+          const name = typeof attachment === "string" ? attachment.split("/").pop() : (attachment.name || source.split("/").pop());
+          const url = api.files.getURL(record, source);
+          const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)(?:\?|$)/i.test(source);
 
           processed.push({
             type: isImage ? "image" : "document",
@@ -82,17 +119,11 @@ export default function NewsDetails() {
     try {
       if (!article) return;
 
-      const text = `${article.title}\n\n${article.description ?? ""}`;
-
-      const image = attachments.find((a) => a.type === "image");
-      if (image) {
-        const fileName = image.url.split("/").pop();
-        const path = FileSystem.cacheDirectory + fileName;
-        const { uri } = await FileSystem.downloadAsync(image.url, path);
-        await Sharing.shareAsync(uri);
-      } else {
-        await Sharing.shareAsync(text);
-      }
+      const description = articleHtmlToText(article.description ?? "");
+      await Share.share({
+        title: article.title,
+        message: `${article.title}\n\n${description}\n\nShared via SafeTap — Zimbabwe Republic Police`,
+      });
     } catch (e) {
       Alert.alert("Error", "Unable to share article");
     }
@@ -117,124 +148,82 @@ export default function NewsDetails() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" backgroundColor="#FFFFFF" />
+    <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-          <Ionicons name="arrow-back" size={24} color="#1f2937" />
-        </TouchableOpacity>
-        <View style={{ flex: 1 }} />
-        <TouchableOpacity onPress={shareArticle} style={styles.headerButton}>
-          <Ionicons name="share-social" size={24} color="#1E3A8A" />
-        </TouchableOpacity>
-      </View>
+      <CustomHeader
+        title="News & Press"
+        subtitle="Official Zimbabwe Republic Police update"
+        showBackButton
+        onBack={() => router.back()}
+        compact
+        rightComponent={<TouchableOpacity onPress={shareArticle} style={styles.sharedHeaderAction}><Ionicons name="share-social-outline" size={21} color="#FFFFFF" /></TouchableOpacity>}
+      />
 
       <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollContent}>
-        {/* Category Badge */}
-        {article.category && (
-          <View style={styles.categoryBadge}>
-            <Text style={styles.categoryBadgeText}>{article.category}</Text>
-          </View>
-        )}
-
-        {/* Title */}
-        <Text style={styles.title}>{article.title}</Text>
-
-        {/* Meta Info */}
-        <View style={styles.metaInfo}>
-          <View style={styles.metaItem}>
-            <Ionicons name="calendar-outline" size={14} color="#64748b" />
-            <Text style={styles.metaText}>
-              {hasValidPublishedDate ? publishedDate.toLocaleDateString("en-US", { 
-                year: "numeric", 
-                month: "short", 
-                day: "numeric" 
-              }) : "Date unavailable"}
-            </Text>
-          </View>
-          <View style={styles.metaDivider} />
-          <View style={styles.metaItem}>
-            <Ionicons name="time-outline" size={14} color="#64748b" />
-            <Text style={styles.metaText}>
-              {hasValidPublishedDate ? publishedDate.toLocaleTimeString("en-US", { 
-                hour: "2-digit", 
-                minute: "2-digit" 
-              }) : "Time unavailable"}
-            </Text>
-          </View>
-        </View>
-
-        {/* Main Image */}
-        <TouchableOpacity 
-          disabled={!images[0]}
+        {/* Editorial hero with the image shown at its original proportions. */}
+        <TouchableOpacity
+          disabled={!featuredImage}
+          activeOpacity={featuredImage ? 0.92 : 1}
           onPress={() => {
-            if (!images[0]) return;
-            setSelectedImage(images[0].url);
+            setSelectedImage(featuredImage?.url);
+            setViewerImages(featuredImage ? [featuredImage] : []);
+            setViewerIndex(0);
+            setViewerStartIndex(0);
             setImageViewerVisible(true);
           }}
           style={styles.mainImageContainer}
         >
-          <ArticleImage
-            source={images[0] ? { uri: images[0].url } : FALLBACK_IMAGE}
-            style={styles.mainImage}
-            resizeMode="cover"
-          />
-          {images[0] && (
-            <View style={styles.imageOverlay}>
-              <Ionicons name="expand-outline" size={24} color="white" />
+          <ArticleImage source={featuredImage ? { uri: featuredImage.url } : FALLBACK_IMAGE} style={styles.featuredHeroImage} resizeMode="cover" />
+          <View style={styles.heroCaption}>
+            <View pointerEvents="none" style={styles.heroGradient}>
+              {[0.02, 0.06, 0.12, 0.22, 0.36, 0.52, 0.66, 0.78].map((opacity, index) => (
+                <View key={index} style={[styles.heroGradientBand, { backgroundColor: `rgba(7,18,39,${opacity})` }]} />
+              ))}
             </View>
-          )}
+            <Text style={styles.heroTitle}>{article.title}</Text>
+            <Text style={styles.heroMeta}>
+              {hasValidPublishedDate ? publishedDate.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "Date unavailable"}
+              {Number(article.view_count) > 0 ? `  ·  ${article.view_count} views` : ""}
+            </Text>
+          </View>
         </TouchableOpacity>
 
-        {/* Description */}
+        {/* Article text */}
+        <View style={styles.articleBody}>
         {article.description && (
           <View style={styles.descriptionSection}>
-            <Text style={styles.description}>
-              {article.description.replace(/<[^>]*>/g, "")}
-            </Text>
+            <Text style={styles.description}>{article.description.replace(/<[^>]*>/g, "")}</Text>
           </View>
         )}
-
-        {/* Content */}
         {article.content && (
-          <View style={styles.contentSection}>
-            <Text style={styles.contentText}>
-              {article.content.replace(/<[^>]*>/g, "")}
-            </Text>
-          </View>
+          <View style={styles.contentSection}><Text style={styles.contentText}>{articleHtmlToText(article.content)}</Text></View>
         )}
+        </View>
 
-        {/* Additional Images Gallery */}
-        {images.length > 1 && (
-          <View style={styles.gallerySection}>
-            <Text style={styles.sectionTitle}>Gallery</Text>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              style={styles.galleryScroll}
-              scrollEventThrottle={16}
-            >
-              {images.slice(1).map((img, i) => (
-                <TouchableOpacity
-                  key={i}
-                  onPress={() => {
-                    setSelectedImage(img.url);
-                    setImageViewerVisible(true);
-                  }}
-                  style={styles.galleryItem}
-                >
-                  <Image source={{ uri: img.url }} style={styles.galleryImage} resizeMode="cover" />
-                  <View style={styles.galleryOverlay}>
-                    <Ionicons name="expand-outline" size={18} color="white" />
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+        {/* Uploaded attachment images are displayed in their saved order. */}
+        {images.length > 0 && <View style={styles.attachmentSection}>
+          <Text style={styles.sectionTitle}>Attached images</Text>
+          <View style={styles.attachmentGallery}>
+            {images.map((image, index) => (
+              <TouchableOpacity
+                key={`${image.url || "fallback"}-${index}`}
+                activeOpacity={image.url ? 0.92 : 1}
+                disabled={!image.url}
+                onPress={() => {
+                  setSelectedImage(image.url);
+                  setViewerImages(images);
+                  setViewerIndex(index);
+                  setViewerStartIndex(index);
+                  setImageViewerVisible(true);
+                }}
+                style={styles.attachmentImageCard}
+              >
+                <ProportionalArticleImage source={image.url ? { uri: image.url } : FALLBACK_IMAGE} />
+                <View style={styles.attachmentNumber}><Text style={styles.attachmentNumberText}>{index + 1} / {images.length}</Text></View>
+              </TouchableOpacity>
+            ))}
           </View>
-        )}
+        </View>}
 
         {/* Documents Section */}
         {documents.length > 0 && (
@@ -275,12 +264,28 @@ export default function NewsDetails() {
           >
             <Ionicons name="close" size={28} color="white" />
           </TouchableOpacity>
-          {selectedImage && (
-            <Image source={{ uri: selectedImage }} style={styles.fullImage} resizeMode="contain" />
+          {viewerImages.length > 0 && (
+            <FlatList
+              key={`viewer-${viewerImages[0]?.url}-${viewerStartIndex}-${viewportWidth}`}
+              data={viewerImages}
+              horizontal
+              pagingEnabled
+              initialScrollIndex={viewerStartIndex}
+              getItemLayout={(_, index) => ({ length: viewportWidth, offset: viewportWidth * index, index })}
+              keyExtractor={(item, index) => `${item.url}-${index}`}
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={(event) => setViewerIndex(Math.round(event.nativeEvent.contentOffset.x / viewportWidth))}
+              renderItem={({ item }) => (
+                <View style={[styles.viewerSlide, { width: viewportWidth }]}>
+                  <Image source={{ uri: item.url }} style={styles.fullImage} resizeMode="contain" />
+                </View>
+              )}
+            />
           )}
+          {viewerImages.length > 1 && <View style={styles.viewerCounter}><Text style={styles.viewerCounterText}>{viewerIndex + 1} / {viewerImages.length}</Text></View>}
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -306,21 +311,22 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: "#ffffff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
+    backgroundColor: "#1E3A8A",
   },
   headerButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#f1f5f9",
+    backgroundColor: "rgba(255,255,255,0.12)",
     justifyContent: "center",
     alignItems: "center",
   },
   // Content
   scrollContent: {
     flex: 1,
+    width: "100%",
+    maxWidth: 900,
+    alignSelf: "center",
   },
   // Category
   categoryBadge: {
@@ -375,17 +381,37 @@ const styles = StyleSheet.create({
   },
   // Main Image
   mainImageContainer: {
-    marginHorizontal: 20,
-    marginBottom: 24,
-    borderRadius: 12,
+    marginBottom: 0,
     overflow: "hidden",
-    backgroundColor: "#e2e8f0",
-    height: 240,
+    backgroundColor: "#0F172A",
   },
+  proportionalImage: { width: "100%", backgroundColor: "#E2E8F0" },
+  featuredHeroImage: { width: "100%", height: 310, backgroundColor: "#0F172A" },
   mainImage: {
     width: "100%",
     height: "100%",
   },
+  sharedHeaderAction: { width: 42, height: 42, alignItems: "center", justifyContent: "center" },
+  heroCaption: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 20, paddingTop: 68, paddingBottom: 18, overflow: "hidden" },
+  heroGradient: { ...StyleSheet.absoluteFillObject },
+  heroGradientBand: { flex: 1 },
+  heroCategory: { alignSelf: "flex-start", color: "#FFFFFF", backgroundColor: "#1E3A8A", borderRadius: 12, paddingHorizontal: 9, paddingVertical: 5, fontSize: 9, fontWeight: "800", letterSpacing: 0.7, overflow: "hidden", marginBottom: 9 },
+  heroTitle: { color: "#FFFFFF", fontSize: 22, lineHeight: 28, fontWeight: "800", letterSpacing: -0.4 },
+  heroMeta: { color: "#E2E8F0", fontSize: 11, fontWeight: "500", marginTop: 9 },
+  articleBody: { marginTop: -8, paddingTop: 24, backgroundColor: "#FFFFFF", borderTopLeftRadius: 14, borderTopRightRadius: 14 },
+  attachmentSection: { marginBottom: 24 },
+  attachmentGallery: { paddingHorizontal: 20, gap: 14 },
+  attachmentImageCard: { width: "100%", borderRadius: 8, overflow: "hidden", backgroundColor: "#E2E8F0", borderWidth: 1, borderColor: "#E2E8F0" },
+  attachmentNumber: {
+    position: "absolute",
+    right: 12,
+    top: 12,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: "rgba(15, 23, 42, 0.78)",
+  },
+  attachmentNumberText: { color: "#FFFFFF", fontSize: 11, fontWeight: "700" },
   imageOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0, 0, 0, 0.2)",
@@ -511,4 +537,7 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
   },
+  viewerSlide: { flex: 1, justifyContent: "center", alignItems: "center" },
+  viewerCounter: { position: "absolute", bottom: 42, alignSelf: "center", backgroundColor: "rgba(255,255,255,0.18)", borderRadius: 16, paddingHorizontal: 12, paddingVertical: 7 },
+  viewerCounterText: { color: "#FFFFFF", fontSize: 12, fontWeight: "700" },
 });

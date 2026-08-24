@@ -7,10 +7,8 @@ import {
   Alert, 
   ScrollView, 
   TextInput,
-  Modal,
   ActivityIndicator,
   Image,
-  ImageBackground,
   StatusBar,
   Platform
 } from 'react-native';
@@ -19,6 +17,8 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Contacts from 'expo-contacts';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SmoothBottomSheet from './components/SmoothBottomSheet';
+import CustomHeader from './components/Header';
+import api from '../lib/connection';
 
 const ContactDetails = () => {
   const params = useLocalSearchParams();
@@ -68,6 +68,7 @@ const ContactDetails = () => {
   };
 
   const makePhoneCall = (number, label) => {
+    api.trackEvent({ event_type: 'STATION_CALL', feature_name: 'station_call', entity_id: params.id });
     if (!number) {
       Alert.alert('Error', `${label} number not available`);
       return;
@@ -132,23 +133,15 @@ const ContactDetails = () => {
         [Contacts.Fields.LastName]: formatDisplayText(params.station),
         [Contacts.Fields.Organization]: 'Zimbabwe Republic Police',
         [Contacts.Fields.JobTitle]: 'Police Station',
-        [Contacts.Fields.Note]: `Station Information\nProvince: ${formatDisplayText(params.province)}\nDistrict: ${formatDisplayText(params.district)}${params.specialty ? `\nSpecialty: ${formatDisplayText(params.specialty)}` : ''}`,
+        [Contacts.Fields.Note]: `Station Information\nProvince: ${formatDisplayText(params.province)}\nDistrict: ${formatDisplayText(params.district)}`,
       };
 
       const phoneNumbers = [];
       
-      if (params.station_number) {
+      if (params.phone) {
         phoneNumbers.push({
           label: Contacts.Fields.PhoneNumbers.Work,
-          number: params.station_number.toString(),
-        });
-      }
-      
-      if (params.member_in_charge_number) {
-        phoneNumbers.push({
-          label: Contacts.Fields.PhoneNumbers.Mobile,
-          number: params.member_in_charge_number.toString(),
-          isPrimary: true,
+          number: params.phone.toString(),
         });
       }
       
@@ -213,20 +206,11 @@ const ContactDetails = () => {
 
     setSubmittingReport(true);
     try {
-      const reportData = {
-        station_id: params.id,
-        station_name: params.station,
-        category: reportCategory,
-        details: reportText,
-        timestamp: new Date().toISOString(),
-        location_available: hasLocationData,
-        latitude: params.latitude,
-        longitude: params.longitude,
-      };
-
-      console.log('Report submitted:', reportData);
-      
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await api.collection('comments').create({
+        tag: 'COMMENT',
+        subject: `Station information correction: ${formatDisplayText(params.station)}`,
+        message: `Category: ${reportCategory}\nStation ID: ${params.id || 'Not supplied'}\n${reportText.trim()}`,
+      });
       
       Alert.alert(
         'Thank You!',
@@ -257,29 +241,20 @@ const ContactDetails = () => {
         { label: 'Station Name', value: formatDisplayText(params.station) },
         { label: 'Province', value: formatDisplayText(params.province) },
         { label: 'District', value: formatDisplayText(params.district) },
-        params.specialty && { label: 'Specialty', value: formatDisplayText(params.specialty) },
         params.address && { label: 'Address', value: formatDisplayText(params.address) },
       ].filter(Boolean),
     },
     {
       title: 'Contact Numbers',
       items: [
-        params.station_number && { 
-          label: 'Station Number', 
-          value: formatPhoneNumber(params.station_number),
+        params.phone && { 
+          label: 'Phone', 
+          value: formatPhoneNumber(params.phone),
           type: 'phone',
-          action: () => makePhoneCall(params.station_number, 'Station'),
+          action: () => makePhoneCall(params.phone, 'Station'),
           icon: 'phone-alt',
           color: '#1E3A8A'
         },
-        // params.member_in_charge_number && { 
-        //   label: 'Officer in Charge', 
-        //   value: `${formatDisplayText(params.member_in_charge || 'Officer')} - ${formatPhoneNumber(params.member_in_charge_number)}`,
-        //   type: 'phone',
-        //   action: () => makePhoneCall(params.member_in_charge_number, 'Officer'),
-        //   icon: 'user-shield',
-        //   color: '#059669'
-        // },
         params.whatsapp_number && { 
           label: 'WhatsApp', 
           value: formatPhoneNumber(params.whatsapp_number),
@@ -296,7 +271,6 @@ const ContactDetails = () => {
     { id: 'wrong_number', label: 'Wrong Phone Number', icon: 'phone' },
     { id: 'wrong_name', label: 'Wrong Station Name', icon: 'building' },
     { id: 'wrong_location', label: 'Wrong Location', icon: 'map-marker-alt' },
-    { id: 'wrong_officer', label: 'Wrong Officer Info', icon: 'user' },
     { id: 'station_closed', label: 'Station Closed', icon: 'door-closed' },
     { id: 'other', label: 'Other Issue', icon: 'exclamation-circle' },
   ];
@@ -306,22 +280,7 @@ const ContactDetails = () => {
       <Stack.Screen options={{ headerShown: false }} />
       <StatusBar barStyle="light-content" backgroundColor="#1E3A8A" />
       
-      {/* Refined Header with Brand Color */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>Station Details</Text>
-          <Text style={styles.headerSubtitle} numberOfLines={1}>
-            {formatDisplayText(params.station)}
-          </Text>
-        </View>
-        <View style={styles.headerRight} />
-      </View>
+      <CustomHeader title="Station Details" subtitle={formatDisplayText(params.station)} showBackButton onBack={() => router.back()} compact />
 
       <ScrollView 
         style={styles.scrollView} 
@@ -330,11 +289,7 @@ const ContactDetails = () => {
       >
         {/* Hero Section with Brand Background */}
         <View style={styles.heroContainer}>
-          <ImageBackground
-            source={require('../assets/images/fallback.png')}
-            style={[styles.heroSection, styles.heroOverlay]}
-            imageStyle={styles.heroBackground}
-          >
+          <View style={[styles.heroSection, styles.heroOverlay]}>
             <View>
               <View style={styles.heroContent}>
                 <View style={styles.stationLogo}>
@@ -364,16 +319,16 @@ const ContactDetails = () => {
                 Zimbabwe Republic Police • Always Ready to Serve
               </Text>
             </View>
-          </ImageBackground>
+          </View>
         </View>
 
         {/* Quick Actions - Clean Card Design */}
         <View style={styles.quickActionsContainer}>
           <View style={styles.quickActions}>
-            {params.station_number && (
+            {params.phone && (
               <TouchableOpacity 
                 style={styles.quickActionButton}
-                onPress={() => makePhoneCall(params.station_number, 'Station')}
+                onPress={() => makePhoneCall(params.phone, 'Station')}
               >
                 <View style={[styles.quickActionIcon, { backgroundColor: '#EFF6FF' }]}>
                   <Ionicons name="phone-alt" size={20} color="#1E3A8A" />
@@ -381,18 +336,6 @@ const ContactDetails = () => {
                 <Text style={styles.quickActionText}>Call Station</Text>
               </TouchableOpacity>
             )}
-            
-            {/* {params.member_in_charge_number && (
-              <TouchableOpacity 
-                style={styles.quickActionButton}
-                onPress={() => makePhoneCall(params.member_in_charge_number, 'Officer')}
-              >
-                <View style={[styles.quickActionIcon, { backgroundColor: '#DCFCE7' }]}>
-                  <Ionicons name="user-shield" size={20} color="#059669" />
-                </View>
-                <Text style={styles.quickActionText}>Call OIC</Text>
-              </TouchableOpacity>
-            )} */}
             
             {hasLocationData && (
               <TouchableOpacity 
@@ -437,15 +380,6 @@ const ContactDetails = () => {
             )}
           </TouchableOpacity>
           
-          {hasLocationData && (
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.actionButtonSuccess]}
-              onPress={getDirections}
-            >
-              <Ionicons name="directions" size={18} color="#FFFFFF" />
-              <Text style={styles.actionButtonSuccessText}>Get Directions</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         {/* Contact Details - Clean Cards */}
@@ -624,7 +558,7 @@ const ContactDetails = () => {
               </TouchableOpacity>
 
               <Text style={styles.modalFooter}>
-                Your report will be reviewed within 24 hours
+                This correction will be sent to ZRP for review.
               </Text>
             </ScrollView>
       </SmoothBottomSheet>
@@ -635,7 +569,7 @@ const ContactDetails = () => {
 const styles = {
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F6F7F9',
   },
   header: {
     backgroundColor: '#1E3A8A',
@@ -679,22 +613,27 @@ const styles = {
     flex: 1,
   },
   scrollContent: {
+    width: '100%',
+    maxWidth: 900,
+    alignSelf: 'center',
     paddingBottom: 20,
   },
   heroContainer: {
-    paddingHorizontal: 0,
-    marginTop: 0,
+    paddingHorizontal: 16,
+    marginTop: 16,
   },
   heroSection: {
-    height: 180,
-    justifyContent: 'flex-center',
+    minHeight: 180,
+    justifyContent: 'center',
+    borderRadius: 14,
+    overflow: 'hidden',
   },
   heroBackground: {
     opacity: 0.6,
     resizeMode: 'cover',
   },
   heroOverlay: {
-    backgroundColor: 'rgba(30, 58, 138, 0.75)',
+    backgroundColor: '#1E3A8A',
     padding: 20,
     paddingTop: 30,
   },
@@ -750,20 +689,22 @@ const styles = {
   },
   quickActionsContainer: {
     paddingHorizontal: 16,
-    marginTop: -20,
+    marginTop: 14,
     marginBottom: 16,
   },
   quickActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   quickActionButton: {
     alignItems: 'center',
@@ -797,7 +738,7 @@ const styles = {
     justifyContent: 'center',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: 10,
     gap: 8,
   },
   actionButtonPrimary: {
@@ -830,10 +771,10 @@ const styles = {
   },
   sectionCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 10,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: '#F3F4F6',
+    borderColor: '#E5E7EB',
   },
   detailItem: {
     paddingVertical: 12,

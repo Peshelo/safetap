@@ -1,0 +1,195 @@
+
+> safetap@1.0.0 start
+> expo start --offline --port 8081
+
+env: load .env
+env: export EXPO_PUBLIC_GOOGLE_MAPS_API_KEY EXPO_PUBLIC_API_URL
+Networking has been disabled
+Starting project at C:\Users\peshelg\Desktop\Systems\Safetap-agentic\safetap
+Starting Metro Bundler
+Waiting on http://localhost:8081
+Logs for your project will appear below.
+Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+λ node_modules\expo-router\node\render.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web node_modules\expo-router\entry.js ▓░░░░░░░░░░░░░░░  9.0% ( 3/10)
+λ node_modules\expo-router\node\render.js ░░░░░░░░░░░░░░░░  4.0% ( 2/15)
+Web node_modules\expo-router\entry.js ▓▓▓░░░░░░░░░░░░░ 19.8% ( 8/18)
+λ node_modules\expo-router\node\render.js ▓░░░░░░░░░░░░░░░  7.2% ( 28/131)
+Web node_modules\expo-router\entry.js ▓▓▓▓░░░░░░░░░░░░ 30.9% (22/59)
+λ node_modules\expo-router\node\render.js ▓▓▓░░░░░░░░░░░░░ 20.7% (146/321)
+Web node_modules\expo-router\entry.js ▓▓▓▓░░░░░░░░░░░░ 30.9% ( 56/244)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓░░░░░░░░░░░ 36.5% (299/495)
+| Browserslist: browsers data (caniuse-lite) is 7 months old. Please run:
+|   npx update-browserslist-db@latest
+|   Why you should do it regularly: https://github.com/browserslist/update-db#readme
+| (node:17304) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+Web node_modules\expo-router\entry.js ▓▓▓▓░░░░░░░░░░░░ 30.9% (115/305)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓░░░░░░░░ 52.5% (474/712)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓░░░░░░░░░░ 40.7% (307/481)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓░░░░░░░░ 52.5% (577/811)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓░░░░░░░░░░ 40.7% (320/552)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓░░░░░░░ 59.1% (753/990)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓░░░░░░░░░░ 40.7% (480/757)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 74.3% ( 923/1081)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓░░░░░░░░ 53.3% (692/948)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 77.3% (1002/1140)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 69.0% ( 849/1022)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░ 82.6% (1135/1302)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 80.9% (1056/1178)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░ 82.6% (1293/1429)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 90.9% (1240/1327)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 91.0% (1487/1569)
+λ Bundling failed 45321ms node_modules\expo-router\node\render.js (1660 modules)
+
+Metro error: Importing native-only module "react-native/Libraries/Utilities/codegenNativeCommands" on web from: node_modules\react-native-maps\lib\MapMarkerNativeComponent.js
+
+Import stack:
+
+ node_modules\react-native-maps\lib\MapMarkerNativeComponent.js
+ | import "react-native/Libraries/Utilities/codegenNativeCommands"
+           ^ Importing react-native internals is not supported on web.
+
+ node_modules\react-native-maps\lib\MapMarker.js
+ | import "./MapMarkerNativeComponent"
+
+ node_modules\react-native-maps\lib\index.js
+ | import "./MapMarker"
+
+ app\maps\index.jsx
+ | import "react-native-maps"
+
+ app (require.context)
+
+
+
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 98.3% (1436/1453)
+Web Bundling failed 45604ms node_modules\expo-router\entry.js (1455 modules)
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android node_modules\expo-router\entry.js ▓░░░░░░░░░░░░░░░ 10.8% ( 82/284)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓░░░░░░░░░ 46.0% (499/769)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 78.4% (1268/1432)
+Android Bundled 12940ms node_modules\expo-router\entry.js (1731 modules)
+ WARN  SafeAreaView has been deprecated and will be removed in a future release. Please use 'react-native-safe-area-context' instead. See https://github.com/th3rdwave/react-native-safe-area-context
+ ERROR  Home nearby stations error [Error: Current location is unavailable. Make sure that location services are enabled] 
+
+Call Stack
+  construct (<native>)
+  apply (<native>)
+  _construct (node_modules\@babel\runtime\helpers\construct.js)
+  Wrapper (node_modules\@babel\runtime\helpers\wrapNativeSuper.js)
+  construct (<native>)
+  _callSuper (node_modules\@babel\runtime\helpers\callSuper.js)
+  constructor (node_modules\expo-modules-core\src\errors\CodedError.ts)
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 100ms node_modules\expo-router\entry.js (1 module)
+ WARN  SafeAreaView has been deprecated and will be removed in a future release. Please use 'react-native-safe-area-context' instead. See https://github.com/th3rdwave/react-native-safe-area-context
+ ERROR  Home nearby stations error [Error: Current location is unavailable. Make sure that location services are enabled] 
+
+Call Stack
+  construct (<native>)
+  apply (<native>)
+  _construct (node_modules\@babel\runtime\helpers\construct.js)
+  Wrapper (node_modules\@babel\runtime\helpers\wrapNativeSuper.js)
+  construct (<native>)
+  _callSuper (node_modules\@babel\runtime\helpers\callSuper.js)
+  constructor (node_modules\expo-modules-core\src\errors\CodedError.ts)
+ ERROR  [ReferenceError: Property 'SwipeNewsDeck' doesn't exist] 
+
+Call Stack
+  News (app\(tabs)\news.jsx)
+  callComponent.reactStackBottomFrame (node_modules\react-native\Libraries\Renderer\implementations\ReactFabric-dev.js)
+  renderWithHooks (node_modules\react-native\Libraries\Renderer\implementations\ReactFabric-dev.js)
+  updateFunctionComponent (node_modules\react-native\Libraries\Renderer\implementations\ReactFabric-dev.js)
+  beginWork (node_modules\react-native\Libraries\Renderer\implementations\ReactFabric-dev.js)
+  runWithFiberInDEV (node_modules\react-native\Libraries\Renderer\implementations\ReactFabric-dev.js)
+  performUnitOfWork (node_modules\react-native\Libraries\Renderer\implementations\ReactFabric-dev.js)
+  workLoopSync (node_modules\react-native\Libraries\Renderer\implementations\ReactFabric-dev.js)
+  renderRootSync (node_modules\react-native\Libraries\Renderer\implementations\ReactFabric-dev.js)
+  performWorkOnRoot (node_modules\react-native\Libraries\Renderer\implementations\ReactFabric-dev.js)
+  performSyncWorkOnRoot (node_modules\react-native\Libraries\Renderer\implementations\ReactFabric-dev.js)
+  flushSyncWorkAcrossRoots_impl (node_modules\react-native\Libraries\Renderer\implementations\ReactFabric-dev.js)
+  flushSyncWork (node_modules\react-native\Libraries\Renderer\implementations\ReactFabric-dev.js)
+  scheduleRefresh (node_modules\react-native\Libraries\Renderer\implementations\ReactFabric-dev.js)
+  apply (<native>)
+  renderer.scheduleRefresh (node_modules\react-devtools-core\dist\backend.js)
+  mountedRootsSnapshot.forEach$argument_0 (node_modules\react-refresh\cjs\react-refresh-runtime.development.js)
+  forEach (<native>)
+  performReactRefresh (node_modules\react-refresh\cjs\react-refresh-runtime.development.js)
+  Refresh.performReactRefresh (node_modules\react-native\Libraries\Core\setUpReactRefresh.js)
+  setTimeout$argument_0 (node_modules\expo\node_modules\@expo\cli\build\metro-require\require.js) 
+
+Call Stack
+  call (<native>)
+  apply (<native>)
+  <anonymous> (node_modules\react-native-css-interop\dist\runtime\wrap-jsx.js)
+  BaseRoute (node_modules\expo-router\build\useScreens.js)
+  SceneView (node_modules\@react-navigation\core\lib\module\SceneView.js)
+  render (node_modules\@react-navigation\core\lib\module\useDescriptors.js)
+  routes.reduce$argument_0 (node_modules\@react-navigation\core\lib\module\useDescriptors.js)
+  reduce (<native>)
+  useDescriptors (node_modules\@react-navigation\core\lib\module\useDescriptors.js)
+  useNavigationBuilder (node_modules\@react-navigation\core\lib\module\useNavigationBuilder.js)
+  BottomTabNavigator (node_modules\@react-navigation\bottom-tabs\lib\module\navigators\createBottomTabNavigator.js)
+  call (<native>)
+  apply (<native>)
+  <anonymous> (node_modules\react-native-css-interop\dist\runtime\wrap-jsx.js)
+  <anonymous> (node_modules\expo-router\build\layouts\withLayoutContext.js)
+  call (<native>)
+  apply (<native>)
+  <anonymous> (node_modules\react-native-css-interop\dist\runtime\wrap-jsx.js)
+  Object.assign$argument_0 (node_modules\expo-router\build\layouts\TabsClient.js)
+  call (<native>)
+  apply (<native>)
+  <anonymous> (node_modules\react-native-css-interop\dist\runtime\wrap-jsx.js)
+  RootLayout (app\(tabs)\_layout.jsx)
+  call (<native>)
+  apply (<native>)
+  <anonymous> (node_modules\react-native-css-interop\dist\runtime\wrap-jsx.js)
+  BaseRoute (node_modules\expo-router\build\useScreens.js)
+  SceneView (node_modules\@react-navigation\core\lib\module\SceneView.js)
+  render (node_modules\@react-navigation\core\lib\module\useDescriptors.js)
+  routes.reduce$argument_0 (node_modules\@react-navigation\core\lib\module\useDescriptors.js)
+  reduce (<native>)
+  useDescriptors (node_modules\@react-navigation\core\lib\module\useDescriptors.js)
+  useNavigationBuilder (node_modules\@react-navigation\core\lib\module\useNavigationBuilder.js)
+  NativeStackNavigator (node_modules\expo-router\build\fork\native-stack\createNativeStackNavigator.js)
+  call (<native>)
+  apply (<native>)
+  <anonymous> (node_modules\react-native-css-interop\dist\runtime\wrap-jsx.js)
+  <anonymous> (node_modules\expo-router\build\layouts\withLayoutContext.js)
+  call (<native>)
+  apply (<native>)
+  <anonymous> (node_modules\react-native-css-interop\dist\runtime\wrap-jsx.js)
+  Object.assign$argument_0 (node_modules\expo-router\build\layouts\StackClient.js)
+  call (<native>)
+  apply (<native>)
+  <anonymous> (node_modules\react-native-css-interop\dist\runtime\wrap-jsx.js)
+  <global> (app\components\LegalDocumentPage.jsx)
+  call (<native>)
+  apply (<native>)
+  <anonymous> (node_modules\react-native-css-interop\dist\runtime\wrap-jsx.js)
+  BaseRoute (node_modules\expo-router\build\useScreens.js)
+  SceneView (node_modules\@react-navigation\core\lib\module\SceneView.js)
+  render (node_modules\@react-navigation\core\lib\module\useDescriptors.js)
+  routes.reduce$argument_0 (node_modules\@react-navigation\core\lib\module\useDescriptors.js)
+  reduce (<native>)
+  useDescriptors (node_modules\@react-navigation\core\lib\module\useDescriptors.js)
+  useNavigationBuilder (node_modules\@react-navigation\core\lib\module\useNavigationBuilder.js)
+  Content (node_modules\expo-router\build\ExpoRoot.js)
+  call (<native>)
+  apply (<native>)
+  <anonymous> (node_modules\react-native-css-interop\dist\runtime\wrap-jsx.js)
+  ContextNavigator (node_modules\expo-router\build\ExpoRoot.js)
+  call (<native>)
+  apply (<native>)
+  <anonymous> (node_modules\react-native-css-interop\dist\runtime\wrap-jsx.js)
+  ExpoRoot (node_modules\expo-router\build\ExpoRoot.js)
+  call (<native>)
+  apply (<native>)
+  <anonymous> (node_modules\react-native-css-interop\dist\runtime\wrap-jsx.js)
+  App (node_modules\expo-router\build\qualified-entry.js)
+  call (<native>)
+  apply (<native>)
+  <anonymous> (node_modules\react-native-css-interop\dist\runtime\wrap-jsx.js)
+  WithDevTools (node_modules\expo\src\launch\withDevTools.tsx)

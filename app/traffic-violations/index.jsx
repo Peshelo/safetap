@@ -297,7 +297,7 @@ const TrafficViolations = () => {
 
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingBottom: 32 }}
+        contentContainerStyle={{ width: "100%", maxWidth: 900, alignSelf: "center", paddingBottom: 32 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

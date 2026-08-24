@@ -10,11 +10,12 @@ import {
   RefreshControl,
   Modal,
   ScrollView,
-  Dimensions,
   Image,
   Linking,
   Platform,
   Alert,
+  Animated,
+  Share,
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import api from "../../lib/connection";
@@ -23,11 +24,35 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import CustomHeader from "../components/Header";
 import SmoothBottomSheet from "../components/SmoothBottomSheet";
 import ArticleImage, { FALLBACK_IMAGE } from "../components/ArticleImage";
-import * as Sharing from "expo-sharing";
 import * as WebBrowser from "expo-web-browser";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const { width, height } = Dimensions.get("window");
 const PAGE_SIZE = 10;
+const NEWS_CACHE_KEY = "safetap_news_cache_v2";
+const DarkImageGradient = () => <View pointerEvents="none" style={StyleSheet.absoluteFill}>{Array.from({ length: 10 }).map((_, index) => <View key={index} style={{ position: "absolute", left: 0, right: 0, bottom: `${index * 7}%`, height: "15%", backgroundColor: `rgba(4,12,28,${Math.max(0.03, 0.72 - index * 0.075)})` }} />)}</View>;
+
+const StoriesRail = ({ items, getImageUrl, onOpen }) => (
+  <View style={styles.storiesSection}>
+    <View style={styles.storiesHeadingRow}>
+      <View>
+        <Text style={styles.storiesEyebrow}>ZRP NEWSROOM</Text>
+        <Text style={styles.storiesTitle}>Stories</Text>
+      </View>
+      <Text style={styles.storiesHint}>Tap to read</Text>
+    </View>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storiesContent}>
+      {items.map((item, index) => (
+        <TouchableOpacity key={item.id} style={styles.storyItem} activeOpacity={0.82} onPress={() => onOpen(item)}>
+          <View style={[styles.storyRing, index === 0 && styles.storyRingFeatured]}>
+            <ArticleImage source={getImageUrl(item) ? { uri: getImageUrl(item) } : FALLBACK_IMAGE} style={styles.storyImage} resizeMode="cover" />
+            {index === 0 && <View style={styles.storyLiveDot} />}
+          </View>
+          <Text style={styles.storyLabel} numberOfLines={2}>{item.title}</Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  </View>
+);
 
 // ─── Fallback Image ────────────────────────────────────────────────────────────
 
@@ -44,22 +69,23 @@ const News = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState("newest");
-  const [categoryFilter, setCategoryFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [sharing, setSharing] = useState(false);
-
-  const categories = [
-    { id: "all", label: "All", icon: "apps-outline" },
-    { id: "press", label: "Press Releases", icon: "newspaper-outline" },
-    { id: "announcements", label: "Announcements", icon: "megaphone-outline" },
-    { id: "updates", label: "Updates", icon: "sync-outline" },
-  ];
+  const [offlineMode, setOfflineMode] = useState(false);
+  const [storyVisible, setStoryVisible] = useState(false);
+  const [activeStoryIndex, setActiveStoryIndex] = useState(0);
+  const fetchingRef = useRef(false);
+  const storyProgress = useRef(new Animated.Value(0)).current;
+  const storyTransition = useRef(new Animated.Value(1)).current;
+  const storyItems = filteredNews.slice(0, 7);
 
   // ── Data fetching ──────────────────────────────────────────────────────────
   const fetchNews = async (page = 1, isRefresh = false) => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
     try {
       if (page === 1) setLoading(true);
       else setLoadingMore(true);
@@ -67,12 +93,18 @@ const News = () => {
       const records = await api.collection("news").getList(page, PAGE_SIZE, {
         sort: sortBy === "newest" ? "-created" : "created",
       });
+      setOfflineMode(false);
 
       if (isRefresh || page === 1) {
         setNews(records.items);
         setFilteredNews(records.items);
+        await AsyncStorage.setItem(NEWS_CACHE_KEY, JSON.stringify(records.items.slice(0, 50)));
       } else {
-        setNews((prev) => [...prev, ...records.items]);
+        setNews((prev) => {
+          const combined = [...prev, ...records.items.filter((item) => !prev.some((existing) => existing.id === item.id))];
+          AsyncStorage.setItem(NEWS_CACHE_KEY, JSON.stringify(combined.slice(0, 50))).catch(() => {});
+          return combined;
+        });
         setFilteredNews((prev) => [...prev, ...records.items]);
       }
 
@@ -80,7 +112,21 @@ const News = () => {
       setCurrentPage(page);
     } catch (err) {
       console.error("Failed to fetch news", err);
+      setOfflineMode(true);
+      setHasMore(false);
+      if (page === 1) {
+        try {
+          const cached = JSON.parse((await AsyncStorage.getItem(NEWS_CACHE_KEY)) || "[]");
+          if (Array.isArray(cached) && cached.length) {
+            setNews(cached);
+            setFilteredNews(cached);
+          }
+        } catch (cacheError) {
+          console.warn("Unable to read cached news", cacheError);
+        }
+      }
     } finally {
+      fetchingRef.current = false;
       setLoading(false);
       setLoadingMore(false);
     }
@@ -93,7 +139,7 @@ const News = () => {
   }, [sortBy]);
 
   const loadMore = () => {
-    if (!hasMore || loadingMore) return;
+    if (!hasMore || loadingMore || offlineMode || fetchingRef.current) return;
     fetchNews(currentPage + 1);
   };
 
@@ -107,13 +153,10 @@ const News = () => {
         !search.trim() ||
         item.title?.toLowerCase().includes(search.toLowerCase()) ||
         item.description?.toLowerCase().includes(search.toLowerCase());
-      const matchCat =
-        categoryFilter === "all" ||
-        (item.category?.toLowerCase() || "press").includes(categoryFilter.toLowerCase());
-      return matchSearch && matchCat;
+      return matchSearch;
     });
     setFilteredNews(filtered);
-  }, [search, categoryFilter, news]);
+  }, [search, news]);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   const getImageUrl = (item) => {
@@ -159,39 +202,65 @@ const News = () => {
 
   const getCategoryColor = (cat) => {
     const map = {
-      press: "#DC2626",
-      announcements: "#7C3AED",
-      updates: "#059669",
+      "press release": "#DC2626",
+      "public notice": "#7C3AED",
+      alert: "#1E3A8A",
     };
-    return map[(cat || "press").toLowerCase()] || "#1E3A8A";
+    return map[(cat || "press release").toLowerCase()] || "#1E3A8A";
   };
 
   const getCategoryIcon = (cat) => {
     const map = {
-      press: "newspaper-outline",
-      announcements: "megaphone-outline",
-      updates: "sync-outline",
+      "press release": "newspaper-outline",
+      "public notice": "megaphone-outline",
+      alert: "warning-outline",
     };
-    return map[(cat || "press").toLowerCase()] || "document-text-outline";
+    return map[(cat || "press release").toLowerCase()] || "document-text-outline";
   };
 
-  // ── Share article using expo-sharing (text only) ───────────────────────────
+  // Share article text through the native platform share sheet.
+  const closeStories = () => {
+    storyProgress.stopAnimation();
+    setStoryVisible(false);
+  };
+
+  const openStory = (item) => {
+    const index = storyItems.findIndex((story) => story.id === item.id);
+    setActiveStoryIndex(Math.max(index, 0));
+    setStoryVisible(true);
+  };
+
+  const changeStory = useCallback((direction) => {
+    setActiveStoryIndex((current) => {
+      const next = current + direction;
+      if (next < 0) return 0;
+      if (next >= storyItems.length) {
+        setStoryVisible(false);
+        return current;
+      }
+      return next;
+    });
+  }, [storyItems.length]);
+
+  useEffect(() => {
+    if (!storyVisible || !storyItems.length) return undefined;
+    storyProgress.setValue(0);
+    storyTransition.setValue(0);
+    Animated.timing(storyTransition, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+    const animation = Animated.timing(storyProgress, { toValue: 1, duration: 6000, useNativeDriver: false });
+    animation.start(({ finished }) => { if (finished) changeStory(1); });
+    return () => animation.stop();
+  }, [storyVisible, activeStoryIndex, storyItems.length, changeStory]);
+
   const shareArticle = async (article) => {
     if (!article) return;
     
     setSharing(true);
     try {
-      const shareText = `📰 ${article.title}\n\n${article.description?.replace(/<[^>]*>/g, "") || "Read more"}\n\n🔗 Shared via SafeTap - Zimbabwe Republic Police App`;
+      const description = article.description?.replace(/<[^>]*>/g, "") || "Read more";
+      const shareText = `${article.title}\n\n${description}\n\nShared via SafeTap — Zimbabwe Republic Police`;
       
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(shareText, {
-          dialogTitle: "Share Article",
-          mimeType: "text/plain",
-
-        });
-      } else {
-        Alert.alert("Error", "Sharing is not available on this device");
-      }
+      await Share.share({ title: article.title, message: shareText });
     } catch (error) {
       console.error("Share error:", error);
       Alert.alert("Error", "Failed to share article");
@@ -234,7 +303,6 @@ const News = () => {
 
   const resetFilters = () => {
     setSortBy("newest");
-    setCategoryFilter("all");
     setSearch("");
   };
 
@@ -284,7 +352,7 @@ const News = () => {
   // ── Get section title and icon ────────────────────────────────────────────
   const getSectionInfo = (sectionKey) => {
     const sectionMap = {
-      today: { title: "Today", icon: "sunny-outline", color: "#F59E0B" },
+      today: { title: "Today", icon: "sunny-outline", color: "#1E3A8A" },
       yesterday: { title: "Yesterday", icon: "time-outline", color: "#6B7280" },
       thisWeek: { title: "This Week", icon: "calendar-outline", color: "#3B82F6" },
       lastWeek: { title: "Last Week", icon: "calendar-outline", color: "#8B5CF6" },
@@ -297,37 +365,33 @@ const News = () => {
 
   // ── News Card Component (Image first) ──────────────────────────────────────
   const NewsCard = ({ item }) => {
-    const category = item.category || "Press Release";
-    const catColor = getCategoryColor(category);
     const relativeDate = formatRelativeDate(item.created);
+    const imageUrl = getImageUrl(item);
 
     return (
       <TouchableOpacity
         style={styles.newsCard}
-        onPress={() => {
-          setSelectedArticle(item);
-          setIsModalVisible(true);
-        }}
+        onPress={() => router.push(`/press-release/${item.id}`)}
         activeOpacity={0.9}
       >
+        <View style={styles.newsCardRow}>
+        <ArticleImage source={imageUrl ? { uri: imageUrl } : FALLBACK_IMAGE} style={styles.newsThumbnail} resizeMode="cover" />
         <View style={styles.newsContent}>
           <View style={styles.newsHeader}>
-            <View style={[styles.categoryChip, { backgroundColor: `${catColor}15` }]}>
-              <Ionicons name={getCategoryIcon(category)} size={12} color={catColor} />
-              <Text style={[styles.categoryText, { color: catColor }]}>{category}</Text>
-            </View>
+            <Text style={styles.newsCategory}>OFFICIAL UPDATE</Text>
             <Text style={styles.newsDate}>{relativeDate}</Text>
           </View>
           <Text style={styles.newsTitle} numberOfLines={2}>
             {item.title}
           </Text>
-          <Text style={styles.newsExcerpt} numberOfLines={2}>
+          <Text style={styles.newsExcerpt} numberOfLines={1}>
             {item.description?.replace(/<[^>]*>/g, "") || "Click to read more..."}
           </Text>
           <View style={styles.newsFooter}>
-            <Text style={[styles.readMoreLink, { color: catColor }]}>Read full story</Text>
-            <Ionicons name="chevron-forward" size={14} color={catColor} />
+            <Text style={styles.publisherText}>ZRP Newsroom</Text>
+            {Number(item.view_count) > 0 && <Text style={styles.viewCount}>{item.view_count} views</Text>}
           </View>
+        </View>
         </View>
       </TouchableOpacity>
     );
@@ -335,32 +399,24 @@ const News = () => {
 
   const FeaturedStory = ({ item }) => {
     const imageUrl = getImageUrl(item);
-    const category = item.category || "Press Release";
-    const catColor = getCategoryColor(category);
     return (
       <TouchableOpacity
         style={styles.featuredCard}
         activeOpacity={0.92}
-        onPress={() => { setSelectedArticle(item); setIsModalVisible(true); }}
+        onPress={() => router.push(`/press-release/${item.id}`)}
       >
         <ArticleImage source={imageUrl ? { uri: imageUrl } : FALLBACK_IMAGE} style={styles.featuredImage} resizeMode="cover" />
+        <DarkImageGradient />
         <View style={styles.featuredContent}>
           <View style={styles.featuredKickerRow}>
             <Text style={styles.featuredKicker}>TOP STORY</Text>
             <Text style={styles.featuredDate}>{formatRelativeDate(item.created)}</Text>
           </View>
           <Text style={styles.featuredTitle} numberOfLines={3}>{item.title}</Text>
-          <Text style={styles.featuredExcerpt} numberOfLines={2}>
-            {item.description?.replace(/<[^>]*>/g, "") || "Read the latest official update."}
-          </Text>
           <View style={styles.featuredFooter}>
-            <View style={[styles.categoryChip, { backgroundColor: `${catColor}15` }]}>
-              <Ionicons name={getCategoryIcon(category)} size={12} color={catColor} />
-              <Text style={[styles.categoryText, { color: catColor }]}>{category}</Text>
-            </View>
             <View style={styles.readStoryAction}>
               <Text style={styles.readStoryText}>Read story</Text>
-              <Ionicons name="arrow-forward" size={16} color="#1E3A8A" />
+              <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
             </View>
           </View>
         </View>
@@ -408,8 +464,6 @@ const News = () => {
     if (!selectedArticle) return null;
 
     const imageUrl = getImageUrl(selectedArticle);
-    const category = selectedArticle.category || "Press Release";
-    const catColor = getCategoryColor(category);
     const fullDate = formatFullDate(selectedArticle.created);
     const links = extractLinks(selectedArticle.description || "");
 
@@ -451,12 +505,6 @@ const News = () => {
             
             <View style={styles.modalContent}>
               <View style={styles.modalMeta}>
-                <View style={[styles.modalCategoryBadge, { backgroundColor: `${catColor}15` }]}>
-                  <Ionicons name={getCategoryIcon(category)} size={14} color={catColor} />
-                  <Text style={[styles.modalCategoryText, { color: catColor }]}>
-                    {category}
-                  </Text>
-                </View>
                 <Text style={styles.modalDate}>{fullDate}</Text>
               </View>
 
@@ -495,6 +543,59 @@ const News = () => {
   };
 
   // ── Filter Modal ───────────────────────────────────────────────────────────
+  const renderStoryViewer = () => {
+    const story = storyItems[activeStoryIndex];
+    if (!story) return null;
+    const imageUrl = getImageUrl(story);
+    const progressWidth = storyProgress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] });
+
+    return (
+      <Modal visible={storyVisible} animationType="slide" presentationStyle="fullScreen" onRequestClose={closeStories}>
+        <View style={styles.storyViewer}>
+          <Animated.View style={[StyleSheet.absoluteFill, { opacity: storyTransition }]}>
+            <ArticleImage source={imageUrl ? { uri: imageUrl } : FALLBACK_IMAGE} style={styles.storyViewerImage} resizeMode="cover" />
+            <DarkImageGradient />
+          </Animated.View>
+          <View pointerEvents="none" style={styles.storyTopShade} />
+          <View style={[styles.storyViewerHeader, { paddingTop: insets.top + 10 }]}>
+            <View style={styles.storyProgressRow}>
+              {storyItems.map((item, index) => (
+                <View key={item.id} style={styles.storyProgressTrack}>
+                  {index < activeStoryIndex && <View style={styles.storyProgressComplete} />}
+                  {index === activeStoryIndex && <Animated.View style={[styles.storyProgressActive, { width: progressWidth }]} />}
+                </View>
+              ))}
+            </View>
+            <View style={styles.storyViewerNav}>
+              <View style={styles.storyPublisherRow}>
+                <View style={styles.storyPublisherMark}><Ionicons name="shield" size={14} color="#FFFFFF" /></View>
+                <Text style={styles.storyPublisherName}>ZRP Newsroom</Text>
+                <Text style={styles.storyViewerDate}>{formatRelativeDate(story.created)}</Text>
+              </View>
+              <View style={styles.storyHeaderActions}>
+                <TouchableOpacity style={styles.storyIconButton} onPress={() => shareArticle(story)} disabled={sharing}>
+                  {sharing ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="share-social-outline" size={20} color="#FFFFFF" />}
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.storyIconButton} onPress={closeStories}><Ionicons name="close" size={24} color="#FFFFFF" /></TouchableOpacity>
+              </View>
+            </View>
+          </View>
+          <TouchableOpacity style={styles.storyPreviousZone} activeOpacity={1} onPress={() => changeStory(-1)} />
+          <TouchableOpacity style={styles.storyNextZone} activeOpacity={1} onPress={() => changeStory(1)} />
+          <Animated.View style={[styles.storyViewerContent, { paddingBottom: insets.bottom + 24, opacity: storyTransition }]}>
+            <Text style={styles.storyViewerLabel}>OFFICIAL UPDATE</Text>
+            <Text style={styles.storyViewerTitle}>{story.title}</Text>
+            <Text style={styles.storyViewerExcerpt} numberOfLines={3}>{story.description?.replace(/<[^>]*>/g, "") || "Read the full update from the ZRP newsroom."}</Text>
+            <TouchableOpacity style={styles.viewArticleButton} activeOpacity={0.86} onPress={() => { closeStories(); router.push(`/press-release/${story.id}`); }}>
+              <Text style={styles.viewArticleText}>View article</Text>
+              <Ionicons name="arrow-forward" size={17} color="#1E3A8A" />
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </Modal>
+    );
+  };
+
   const FilterModal = () => (
     <SmoothBottomSheet
       visible={showFilters}
@@ -537,31 +638,6 @@ const News = () => {
               </View>
             </View>
 
-            <View style={styles.filterSection}>
-              <Text style={styles.filterSectionLabel}>Category</Text>
-              <View style={styles.categoryGrid}>
-                {categories.map((cat) => (
-                  <TouchableOpacity
-                    key={cat.id}
-                    style={[
-                      styles.categoryChip,
-                      categoryFilter === cat.id && styles.categoryChipActive,
-                    ]}
-                    onPress={() => setCategoryFilter(cat.id)}
-                  >
-                    <Ionicons name={cat.icon} size={16} color={categoryFilter === cat.id ? "#1E3A8A" : "#6B7280"} />
-                    <Text
-                      style={[
-                        styles.categoryChipText,
-                        categoryFilter === cat.id && styles.categoryChipTextActive,
-                      ]}
-                    >
-                      {cat.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
           </ScrollView>
 
           <View style={styles.filterActions}>
@@ -584,19 +660,41 @@ const News = () => {
     </SmoothBottomSheet>
   );
 
+  const timelineRows = [];
+  let previousTimelineLabel = null;
+  filteredNews.slice(1).forEach((item) => {
+    const date = new Date(item.created);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const articleDay = Number.isNaN(date.getTime()) ? null : new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const difference = articleDay ? Math.round((today - articleDay) / 86400000) : null;
+    const label = difference === 0
+      ? `Today · ${date.toLocaleDateString("en-GB", { day: "numeric", month: "long" })}`
+      : difference === 1
+        ? `Yesterday · ${date.toLocaleDateString("en-GB", { day: "numeric", month: "long" })}`
+        : articleDay
+          ? date.toLocaleDateString("en-GB", { month: "long", year: "numeric" })
+          : "Earlier stories";
+    if (label !== previousTimelineLabel) {
+      timelineRows.push({ rowType: "section", id: `section-${label}`, label });
+      previousTimelineLabel = label;
+    }
+    timelineRows.push({ rowType: "article", ...item });
+  });
+
   // ── Main Render ───────────────────────────────────────────────────────────
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <CustomHeader title="News & Press" subtitle="Zimbabwe Republic Police" showLogo compact rightComponent={(
+      <CustomHeader title="News" subtitle="Zimbabwe Republic Police" showLogo compact rightComponent={(
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={styles.headerIcon}
             onPress={() => setShowFilters(true)}
           >
             <Ionicons name="options-outline" size={20} color="#FFFFFF" />
-            {(categoryFilter !== "all" || sortBy !== "newest") && (
+            {sortBy !== "newest" && (
               <View style={styles.activeFilterDot} />
             )}
           </TouchableOpacity>
@@ -623,35 +721,13 @@ const News = () => {
         </View>
       </View>
 
-      <View style={styles.categoryNav}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryNavContent}>
-          {categories.map((category) => {
-            const active = categoryFilter === category.id;
-            return (
-              <TouchableOpacity key={category.id} style={[styles.categoryNavItem, active && styles.categoryNavItemActive]} onPress={() => setCategoryFilter(category.id)}>
-                <Ionicons name={category.icon} size={16} color={active ? "#FFFFFF" : "#475569"} />
-                <Text style={[styles.categoryNavText, active && styles.categoryNavTextActive]}>{category.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
+      {offlineMode && <TouchableOpacity style={styles.offlineBanner} onPress={onRefresh} activeOpacity={0.8}><Ionicons name="cloud-offline-outline" size={17} color="#1E3A8A" /><View style={{flex:1}}><Text style={styles.offlineTitle}>Showing saved news</Text><Text style={styles.offlineText}>No connection. Pull down or tap here to try again.</Text></View></TouchableOpacity>}
 
       {/* Active Filters */}
-      {(categoryFilter !== "all" || search) && (
+      {search ? (
         <View style={styles.activeFilters}>
           <Text style={styles.activeFiltersLabel}>Active filters:</Text>
           <View style={styles.filterChips}>
-            {categoryFilter !== "all" && (
-              <View style={styles.filterChip}>
-                <Text style={styles.filterChipText}>
-                  {categories.find(c => c.id === categoryFilter)?.label}
-                </Text>
-                <TouchableOpacity onPress={() => setCategoryFilter("all")}>
-                  <Ionicons name="close" size={14} color="#1E3A8A" />
-                </TouchableOpacity>
-              </View>
-            )}
             {search && (
               <View style={styles.filterChip}>
                 <Text style={styles.filterChipText}>Search: {search}</Text>
@@ -668,7 +744,7 @@ const News = () => {
             </TouchableOpacity>
           </View>
         </View>
-      )}
+      ) : null}
 
       {/* News List */}
       {loading ? (
@@ -690,9 +766,11 @@ const News = () => {
         </ScrollView>
       ) : (
         <FlatList
-          data={filteredNews.slice(1)}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <NewsCard item={item} />}
+          data={timelineRows}
+          keyExtractor={(item) => item.rowType === "section" ? item.id : `article-${item.id}`}
+          renderItem={({ item }) => item.rowType === "section"
+            ? <View style={styles.timelineHeader}><Text style={styles.timelineTitle}>{item.label}</Text></View>
+            : <NewsCard item={item} />}
           contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -708,13 +786,12 @@ const News = () => {
           ListHeaderComponent={
             filteredNews.length > 0 && !loading ? (
               <View>
+                <StoriesRail items={storyItems} getImageUrl={getImageUrl} onOpen={openStory} />
                 <FeaturedStory item={filteredNews[0]} />
-                {filteredNews.length > 1 && (
-                  <View style={styles.latestHeader}>
-                    <Text style={styles.latestTitle}>Latest updates</Text>
-                    <Text style={styles.resultsText}>{filteredNews.length} stories</Text>
-                  </View>
-                )}
+                <View style={styles.latestHeader}>
+                  <Text style={styles.latestTitle}>More from the newsroom</Text>
+                  <Text style={styles.resultsText}>{Math.max(filteredNews.length - 1, 0)} stories</Text>
+                </View>
               </View>
             ) : null
           }
@@ -734,11 +811,11 @@ const News = () => {
                 </View>
                 <Text style={styles.emptyTitle}>No articles found</Text>
                 <Text style={styles.emptySubtitle}>
-                  {search || categoryFilter !== "all"
+                  {search
                     ? "Try adjusting your search or filters"
                     : "Check back later for updates"}
                 </Text>
-                {(search || categoryFilter !== "all") && (
+                {search && (
                   <TouchableOpacity
                     style={styles.clearFiltersButton}
                     onPress={resetFilters}
@@ -753,6 +830,7 @@ const News = () => {
       )}
 
       {/* Modals */}
+      {renderStoryViewer()}
       <ArticleModal />
       <FilterModal />
     </View>
@@ -763,7 +841,7 @@ const News = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#F6F7F9",
   },
   header: {
     backgroundColor: "#1E3A8A",
@@ -808,7 +886,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#F59E0B",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#1E3A8A",
   },
@@ -835,6 +913,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#111827",
   },
+  offlineBanner: { marginHorizontal: 16, marginBottom: 10, paddingHorizontal: 13, paddingVertical: 10, borderRadius: 10, backgroundColor: "#EFF6FF", borderWidth: 1, borderColor: "#BFDBFE", flexDirection: "row", alignItems: "center", gap: 9 },
+  offlineTitle: { color: "#1E3A8A", fontSize: 12, fontFamily: "GoogleSans_600SemiBold" },
+  offlineText: { color: "#475569", fontSize: 10.5, marginTop: 1 },
   categoryNav: {
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
@@ -901,7 +982,11 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   listContent: {
-    padding: 16,
+    width: "100%",
+    maxWidth: 900,
+    alignSelf: "center",
+    paddingHorizontal: 16,
+    paddingTop: 10,
   },
   resultsHeader: {
     marginBottom: 16,
@@ -939,16 +1024,17 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   newsCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 8,
-    marginBottom: 12,
+    backgroundColor: "transparent",
+    borderRadius: 0,
+    marginBottom: 0,
     overflow: "hidden",
     elevation: 0,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderBottomWidth: 1,
+    borderColor: "#DDE3EA",
   },
+  newsCardRow: { flexDirection: "row", alignItems: "center", paddingVertical: 15, gap: 14 },
   newsContent: {
-    padding: 16,
+    flex: 1,
   },
   newsHeader: {
     flexDirection: "row",
@@ -975,49 +1061,92 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#9CA3AF",
   },
+  newsCategory: { fontSize: 9, color: "#1E3A8A", fontWeight: "800", letterSpacing: 0.9 },
   newsTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "700",
     color: "#111827",
-    lineHeight: 23,
-    marginBottom: 8,
+    lineHeight: 21,
+    marginBottom: 5,
   },
   newsExcerpt: {
     fontSize: 13,
     color: "#6B7280",
     lineHeight: 19,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   newsFooter: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    justifyContent: "space-between",
+    gap: 8,
   },
+  plainCategory: { fontSize: 9, fontWeight: "700", color: "#475569", letterSpacing: 0.8 },
+  publisherText: { fontSize: 11, fontWeight: "700", color: "#1E3A8A" },
+  viewCount: { fontSize: 10, color: "#94A3B8" },
+  newsThumbnail: { width: 104, height: 104, borderRadius: 14, backgroundColor: "#E2E8F0" },
+  timelineHeader: { paddingTop: 24, paddingHorizontal: 2, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: "#CBD5E1" },
+  timelineTitle: { fontSize: 14, fontWeight: "800", color: "#0F172A", letterSpacing: -0.1 },
+  storiesSection: { marginBottom: 20, marginHorizontal: -16 },
+  storiesHeadingRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 16, marginBottom: 13 },
+  storiesEyebrow: { fontSize: 9, fontWeight: "800", color: "#1E3A8A", letterSpacing: 1.25, marginBottom: 2 },
+  storiesTitle: { fontSize: 23, fontWeight: "800", color: "#0F172A", letterSpacing: -0.5 },
+  storiesHint: { fontSize: 11, color: "#64748B", marginBottom: 3 },
+  storiesContent: { paddingHorizontal: 16, gap: 13 },
+  storyItem: { width: 72, alignItems: "center" },
+  storyRing: { width: 68, height: 68, borderRadius: 34, padding: 3, borderWidth: 2, borderColor: "#CBD5E1", backgroundColor: "#FFFFFF", position: "relative" },
+  storyRingFeatured: { borderColor: "#1E3A8A" },
+  storyImage: { width: "100%", height: "100%", borderRadius: 30, backgroundColor: "#E2E8F0" },
+  storyLiveDot: { position: "absolute", right: 1, bottom: 4, width: 13, height: 13, borderRadius: 7, backgroundColor: "#1E3A8A", borderWidth: 2, borderColor: "#FFFFFF" },
+  storyLabel: { fontSize: 10, lineHeight: 13, fontWeight: "600", color: "#334155", textAlign: "center", marginTop: 6 },
   readMoreLink: {
     fontSize: 12,
     fontWeight: "600",
   },
   featuredCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 10,
+    backgroundColor: "#0F172A",
+    borderRadius: 22,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    marginBottom: 22,
+    marginBottom: 26, height: 360, position: "relative",
     elevation: 0,
   },
-  featuredImage: { width: "100%", height: 210, backgroundColor: "#E2E8F0" },
-  featuredContent: { padding: 18 },
+  featuredImage: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%", backgroundColor: "#E2E8F0" },
+  featuredContent: { position: "absolute", left: 0, right: 0, bottom: 0, padding: 22 },
   featuredKickerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
-  featuredKicker: { fontSize: 11, fontWeight: "800", color: "#B91C1C", letterSpacing: 1.1 },
-  featuredDate: { fontSize: 12, color: "#64748B" },
-  featuredTitle: { fontSize: 23, lineHeight: 29, fontWeight: "800", color: "#0F172A", letterSpacing: -0.4 },
+  featuredKicker: { fontSize: 10, fontWeight: "800", color: "#FFFFFF", letterSpacing: 1.2 },
+  featuredDate: { fontSize: 12, color: "#E2E8F0" },
+  featuredTitle: { fontSize: 27, lineHeight: 32, fontWeight: "800", color: "#FFFFFF", letterSpacing: -0.55 },
   featuredExcerpt: { fontSize: 14, lineHeight: 21, color: "#64748B", marginTop: 10 },
   featuredFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginTop: 16 },
   readStoryAction: { flexDirection: "row", alignItems: "center", gap: 5 },
-  readStoryText: { fontSize: 13, fontWeight: "700", color: "#1E3A8A" },
-  latestHeader: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginBottom: 12 },
-  latestTitle: { fontSize: 20, fontWeight: "800", color: "#0F172A", letterSpacing: -0.3 },
+  readStoryText: { fontSize: 13, fontWeight: "700", color: "#FFFFFF" },
+  latestHeader: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginBottom: 2 },
+  latestTitle: { fontSize: 20, fontWeight: "800", color: "#0F172A", letterSpacing: -0.3, flexShrink: 1 },
+  storyViewer: { flex: 1, backgroundColor: "#071329" },
+  storyViewerImage: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%", backgroundColor: "#0F172A" },
+  storyTopShade: { position: "absolute", left: 0, right: 0, top: 0, height: 180, backgroundColor: "rgba(4,12,28,0.34)" },
+  storyViewerHeader: { position: "absolute", top: 0, left: 0, right: 0, paddingHorizontal: 12, zIndex: 4 },
+  storyProgressRow: { flexDirection: "row", gap: 4 },
+  storyProgressTrack: { flex: 1, height: 3, borderRadius: 2, overflow: "hidden", backgroundColor: "rgba(255,255,255,0.38)" },
+  storyProgressComplete: { ...StyleSheet.absoluteFillObject, backgroundColor: "#FFFFFF" },
+  storyProgressActive: { position: "absolute", left: 0, top: 0, bottom: 0, backgroundColor: "#FFFFFF" },
+  storyViewerNav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 12 },
+  storyPublisherRow: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1 },
+  storyPublisherMark: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#1E3A8A", borderWidth: 1, borderColor: "rgba(255,255,255,0.55)" },
+  storyPublisherName: { color: "#FFFFFF", fontSize: 13, fontWeight: "700" },
+  storyViewerDate: { color: "rgba(255,255,255,0.72)", fontSize: 11 },
+  storyHeaderActions: { flexDirection: "row", gap: 4 },
+  storyIconButton: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(4,12,28,0.34)" },
+  storyPreviousZone: { position: "absolute", left: 0, top: 100, bottom: 220, width: "36%", zIndex: 2 },
+  storyNextZone: { position: "absolute", right: 0, top: 100, bottom: 220, width: "64%", zIndex: 2 },
+  storyViewerContent: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 22, zIndex: 3 },
+  storyViewerLabel: { color: "rgba(255,255,255,0.78)", fontSize: 10, fontWeight: "800", letterSpacing: 1.2, marginBottom: 9 },
+  storyViewerTitle: { color: "#FFFFFF", fontSize: 29, lineHeight: 35, fontWeight: "800", letterSpacing: -0.6 },
+  storyViewerExcerpt: { color: "rgba(255,255,255,0.84)", fontSize: 14, lineHeight: 21, marginTop: 10 },
+  viewArticleButton: { height: 50, marginTop: 20, borderRadius: 25, backgroundColor: "#FFFFFF", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  viewArticleText: { color: "#1E3A8A", fontSize: 14, fontWeight: "800" },
   skeletonContainer: {
     padding: 16,
   },

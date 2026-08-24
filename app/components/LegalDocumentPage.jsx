@@ -41,13 +41,13 @@ export default function LegalDocumentPage({ title, subtitle, effectiveDate, sect
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8FAFC" },
+  container: { flex: 1, backgroundColor: "#F6F7F9" },
   scrollView: { flex: 1 },
-  content: { padding: 20, paddingBottom: 48 },
+  content: { width: "100%", maxWidth: 900, alignSelf: "center", padding: 20, paddingBottom: 48 },
   effectiveDate: { color: "#64748B", fontSize: 13, marginBottom: 22 },
   section: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 12,
+    borderRadius: 10,
     padding: 18,
     marginBottom: 12,
     borderWidth: 1,

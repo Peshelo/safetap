@@ -20,7 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import SmoothBottomSheet from './SmoothBottomSheet';
 
 const { width } = Dimensions.get('window');
-const SLIDER_WIDTH = width - 60;
+const SLIDER_WIDTH = Math.min(width - 60, 560);
 const CIRCLE_SIZE = 70;
 const TRACK_HEIGHT = 80;
 

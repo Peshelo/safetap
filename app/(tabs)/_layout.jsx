@@ -18,10 +18,10 @@ export default function RootLayout() {
           tabBarStyle: {
             backgroundColor: "#FFFFFF",
             borderTopWidth: 1,
-            borderTopColor: "#D1D5DB", // Light gray border (hex value)
+            borderTopColor: "#E5E7EB",
 
-            height: 58 + insets.bottom,
-            paddingTop: 0,
+            height: 62 + insets.bottom,
+            paddingTop: 5,
             paddingBottom: Math.max(insets.bottom, 8),
             paddingHorizontal: 0,
             marginHorizontal: 0,
@@ -32,11 +32,11 @@ export default function RootLayout() {
             shadowRadius: 4,
             overflow: "hidden",
           },
-          tabBarActiveTintColor: "#1E40AF", // Dark blue for active
-          tabBarInactiveTintColor: "#A9A9A9", // Darker gray for inactive
+          tabBarActiveTintColor: "#1E3A8A",
+          tabBarInactiveTintColor: "#64748B",
           tabBarLabelStyle: {
-            fontSize: 9,
-            fontWeight: "500",
+            fontFamily: "GoogleSans_500Medium",
+            fontSize: 10,
             marginTop: 2,
             marginBottom: 0,
           },
@@ -59,7 +59,7 @@ export default function RootLayout() {
             tabBarIcon: ({ focused, color, size }) => (
               <Ionicons
                 name={focused ? "home" : "home-outline"}
-                size={22}
+                size={21}
                 color={color}
               />
             ),
@@ -74,7 +74,7 @@ export default function RootLayout() {
             tabBarIcon: ({ focused, color, size }) => (
               <Ionicons
                 name={focused ? "call" : "call-outline"}
-                size={22}
+                size={21}
                 color={color}
               />
             ),
@@ -87,7 +87,7 @@ export default function RootLayout() {
             tabBarIcon: ({ focused, color, size }) => (
               <Ionicons
                 name={focused ? "newspaper" : "newspaper-outline"}
-                size={22}
+                size={21}
                 color={color}
               />
             ),
@@ -101,7 +101,7 @@ export default function RootLayout() {
             tabBarIcon: ({ focused, color, size }) => (
               <Ionicons
                 name={focused ? "grid" : "grid-outline"}
-                size={22}
+                size={21}
                 color={color}
               />
             ),
@@ -115,7 +115,7 @@ export default function RootLayout() {
             tabBarIcon: ({ focused, color, size }) => (
               <Ionicons
                 name={focused ? "information-circle" : "information-circle-outline"}
-                size={22}
+                size={21}
                 color={color}
               />
             ),

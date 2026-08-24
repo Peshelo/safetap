@@ -109,6 +109,8 @@ const PoliceMap = () => {
   const isOnline = useNetworkStatus();
   const mapRef = useRef(null);
   const regionFetchTimer = useRef(null);
+  const stationSearchTimer = useRef(null);
+  const searchRequestId = useRef(0);
   const lastFetchCenter = useRef(null);
 
   // Animation values
@@ -175,6 +177,29 @@ const PoliceMap = () => {
   ).current;
 
   // ── Data fetching from real API ───────────────────────────────────────────
+  const loadStationsFromCache = async (center) => {
+    const cached = await api.getCachedStations();
+    const allStations = cached
+      .filter((station) => isValidCoordinate(parseFloat(station.latitude), parseFloat(station.longitude)))
+      .map((station) => {
+        const latitude = parseFloat(station.latitude);
+        const longitude = parseFloat(station.longitude);
+        return {
+          ...station,
+          latitude,
+          longitude,
+          distance: center ? getDistanceFromLatLonInKm(center.latitude, center.longitude, latitude, longitude) : null,
+        };
+      })
+      .sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
+    const withinFiftyKm = allStations.filter((station) => station.distance === null || station.distance <= 50);
+    const stations = withinFiftyKm.length >= 3 ? withinFiftyKm : allStations.slice(0, 3);
+    setPoliceStations(stations);
+    setFilteredStations(stations);
+    setHasMoreStations(false);
+    return stations;
+  };
+
   const fetchPoliceStations = async (center = userCoords, page = 1) => {
     try {
       if (!center) return;
@@ -194,7 +219,7 @@ const PoliceMap = () => {
               station: s.station || s.name || "Police Station",
               latitude: lat,
               longitude: lng,
-              station_number: s.station_number || s.phone,
+              phone: s.phone,
               address: s.address || "Address not available",
               description: s.description || "No description available",
               operating_hours: s.operating_hours || "24/7",
@@ -209,11 +234,12 @@ const PoliceMap = () => {
         setHasMoreStations(Boolean(payload.has_more));
         lastFetchCenter.current = center;
       } else {
-        Alert.alert("Offline", "Unable to fetch stations. Please check your connection.");
+        await loadStationsFromCache(center);
       }
     } catch (err) {
       console.error("Failed to fetch police stations:", err);
-      Alert.alert("Error", "Failed to load police stations");
+      const cached = await loadStationsFromCache(center);
+      if (!cached.length) Alert.alert("Stations unavailable", "Connect to the internet once to save the police station directory for offline use.");
     } finally {
       setLoading(false);
     }
@@ -233,7 +259,7 @@ const PoliceMap = () => {
           station: station.station || station.name || "Police Station",
           latitude: parseFloat(station.latitude),
           longitude: parseFloat(station.longitude),
-          station_number: station.station_number || station.phone,
+          phone: station.phone,
           address: station.address || "Address not available",
           description: station.description || "No description available",
           operating_hours: station.operating_hours || "24/7",
@@ -281,6 +307,7 @@ const PoliceMap = () => {
           "Location Services Off",
           "Turn on device location to centre the map on your position. You can still browse and search stations manually."
         );
+        await fetchPoliceStations(mapRegion);
         return;
       }
       const location = await Location.getCurrentPositionAsync({
@@ -407,6 +434,7 @@ const PoliceMap = () => {
           "Route Error",
           `Could not fetch route: ${data.status}. Please check your API key.`
         );
+        await fetchPoliceStations(mapRegion);
         return;
       }
 
@@ -450,6 +478,7 @@ const PoliceMap = () => {
         "Navigation Error",
         "Failed to fetch route. Check your internet connection."
       );
+      await fetchPoliceStations(mapRegion);
     } finally {
       setNavLoading(false);
     }
@@ -473,7 +502,7 @@ const PoliceMap = () => {
 
   // ── Other actions ─────────────────────────────────────────────────────────
   const handleCall = (station) => {
-    const phoneNumber = station.station_number?.replace(/[^\d+]/g, "");
+    const phoneNumber = station.phone?.replace(/[^\d+]/g, "");
     if (phoneNumber) {
       Linking.openURL(`tel:${phoneNumber}`).catch(() =>
         Alert.alert("Error", "Could not make the call")
@@ -550,23 +579,63 @@ const PoliceMap = () => {
     if (userCoords) fetchPoliceStations();
   }, [userCoords, isOnline]);
 
-  useEffect(() => () => clearTimeout(regionFetchTimer.current), []);
+  useEffect(() => () => {
+    clearTimeout(regionFetchTimer.current);
+    clearTimeout(stationSearchTimer.current);
+  }, []);
 
   useEffect(() => {
-    if (searchQuery.trim() === "") {
+    clearTimeout(stationSearchTimer.current);
+    const query = searchQuery.trim();
+    if (!query) {
+      searchRequestId.current += 1;
       setFilteredStations(policeStations);
-    } else {
-      const q = searchQuery.toLowerCase();
-      setFilteredStations(
-        policeStations.filter(
-          (s) =>
-            s.station?.toLowerCase().includes(q) ||
-            s.address?.toLowerCase().includes(q) ||
-            s.description?.toLowerCase().includes(q)
-        )
-      );
+      return;
     }
-  }, [searchQuery, policeStations]);
+
+    const requestId = ++searchRequestId.current;
+    stationSearchTimer.current = setTimeout(async () => {
+      try {
+        let results;
+        if (isOnline) {
+          const response = await api.collection("contacts").getList(1, 100, {
+            filter: `station ~ "${query.replace(/["\\]/g, "")}"`,
+          });
+          results = response.items;
+        } else {
+          const q = query.toLowerCase();
+          results = (await api.getCachedStations()).filter((station) =>
+            [station.station, station.province, station.district, station.phone, station.whatsapp]
+              .some((value) => String(value || "").toLowerCase().includes(q))
+          );
+        }
+
+        if (requestId !== searchRequestId.current) return;
+        const center = userCoords || mapRegion;
+        setFilteredStations(results
+          .filter((station) => isValidCoordinate(station.latitude, station.longitude))
+          .map((station) => {
+            const latitude = parseFloat(station.latitude);
+            const longitude = parseFloat(station.longitude);
+            return {
+              ...station,
+              station: station.station || station.name || "Police Station",
+              latitude,
+              longitude,
+              phone: station.phone,
+              address: station.address || `${station.district || ""}, ${station.province || ""}`.replace(/^, |, $/g, ""),
+              distance: getDistanceFromLatLonInKm(center.latitude, center.longitude, latitude, longitude),
+            };
+          })
+          .sort((a, b) => a.distance - b.distance));
+      } catch (error) {
+        if (requestId === searchRequestId.current) setFilteredStations([]);
+        console.error("Station directory search failed", error);
+      }
+    }, 300);
+
+    return () => clearTimeout(stationSearchTimer.current);
+  }, [searchQuery, policeStations, isOnline, userCoords]);
 
   const stationsWithValidCoords = filteredStations.filter((s) =>
     isValidCoordinate(s.latitude, s.longitude)
@@ -589,7 +658,7 @@ const PoliceMap = () => {
       >
         <View style={styles.stationCardInner}>
           <View style={[styles.stationIcon, isSelected && styles.stationIconSelected]}>
-            <Ionicons name="shield-alt" size={20} color="#FFFFFF" />
+            <Image source={require("../../assets/images/logo-alternate.png")} style={styles.stationLogoImage} />
           </View>
 
           <View style={styles.stationInfo}>
@@ -611,10 +680,10 @@ const PoliceMap = () => {
               </Text>
             </View>
 
-            {station.station_number && (
+            {station.phone && (
               <View style={styles.stationPhone}>
                 <Ionicons name="phone" size={12} color="#6B7280" />
-                <Text style={styles.stationPhoneText}>{station.station_number}</Text>
+                <Text style={styles.stationPhoneText}>{station.phone}</Text>
               </View>
             )}
           </View>
@@ -761,7 +830,8 @@ const PoliceMap = () => {
                 onPress={() => focusOnStation(station)}
               >
                 <View style={[styles.marker, isSelected && styles.markerSelected]}>
-                  <Ionicons name="shield-checkmark" size={isSelected ? 20 : 17} color="#FFFFFF" />
+                  <Image source={require("../../assets/images/logo-alternate.png")} style={styles.markerLogoImage} />
+                  <View style={styles.markerPoint}><View style={styles.markerPointCenter} /></View>
                 </View>
               </Marker>
             );
@@ -860,9 +930,17 @@ const PoliceMap = () => {
               </View>
 
               {loading ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#1E3A8A" />
-                  <Text style={styles.loadingText}>Loading stations...</Text>
+                <View style={styles.stationSkeletonList}>
+                  {[0, 1, 2].map((item) => (
+                    <View key={item} style={styles.stationSkeletonCard}>
+                      <View style={styles.stationSkeletonLogo} />
+                      <View style={styles.stationSkeletonBody}>
+                        <View style={[styles.stationSkeletonLine, { width: "58%" }]} />
+                        <View style={[styles.stationSkeletonLine, styles.stationSkeletonLineSmall, { width: "82%" }]} />
+                        <View style={[styles.stationSkeletonLine, styles.stationSkeletonLineSmall, { width: "42%" }]} />
+                      </View>
+                    </View>
+                  ))}
                 </View>
               ) : filteredStations.length === 0 ? (
                 <View style={styles.emptyContainer}>
@@ -912,7 +990,7 @@ const PoliceMap = () => {
                 {/* Header */}
                 <View style={styles.detailHeader}>
                   <View style={styles.detailIcon}>
-                    <Ionicons name="shield-alt" size={32} color="#FFFFFF" />
+                    <Image source={require("../../assets/images/logo-alternate.png")} style={styles.detailLogoImage} />
                   </View>
                   <View style={styles.detailHeaderInfo}>
                     <Text style={styles.detailTitle}>{selectedStation.station}</Text>
@@ -945,7 +1023,7 @@ const PoliceMap = () => {
                   <TouchableOpacity
                     style={[styles.actionButton, styles.callButton]}
                     onPress={() => handleCall(selectedStation)}
-                    disabled={!selectedStation.station_number}
+                    disabled={!selectedStation.phone}
                   >
                     <Ionicons name="phone" size={20} color="#FFFFFF" />
                     <Text style={styles.actionButtonText}>Call</Text>
@@ -956,14 +1034,14 @@ const PoliceMap = () => {
                 <View style={styles.detailsSection}>
                   <Text style={styles.sectionTitle}>Station Details</Text>
                   
-                  {selectedStation.station_number && (
+                  {selectedStation.phone && (
                     <View style={styles.detailRow}>
                       <View style={styles.detailIconSmall}>
                         <Ionicons name="phone" size={18} color="#3B82F6" />
                       </View>
                       <View style={styles.detailRowContent}>
                         <Text style={styles.detailLabel}>Phone Number</Text>
-                        <Text style={styles.detailValue}>{selectedStation.station_number}</Text>
+                        <Text style={styles.detailValue}>{selectedStation.phone}</Text>
                       </View>
                     </View>
                   )}
@@ -1043,13 +1121,6 @@ const PoliceMap = () => {
           </Animated.View>
         )}
 
-        {/* Loading Overlay */}
-        {loading && (
-          <View style={styles.loadingOverlay}>
-            <ActivityIndicator size="large" color="#1E3A8A" />
-            <Text style={styles.loadingOverlayText}>Loading police stations...</Text>
-          </View>
-        )}
       </View>
     </SafeAreaView>
   );
@@ -1266,22 +1337,28 @@ const styles = {
     elevation: 5,
   },
   marker: {
-    width: 38,
-    height: 38,
-    borderRadius: 14,
-    backgroundColor: "#1E3A8A",
-    borderWidth: 3,
-    borderColor: "#FFFFFF",
+    width: 44,
+    height: 44,
+    borderRadius: 11,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
     elevation: 8,
     alignItems: "center",
     justifyContent: "center",
   },
   markerSelected: {
-    width: 46,
-    height: 46,
-    borderRadius: 17,
-    backgroundColor: "#DC2626",
+    width: 50,
+    height: 50,
+    borderRadius: 13,
+    borderWidth: 2,
+    borderColor: "#1E3A8A",
   },
+  markerLogoImage: { width: "76%", height: "76%", resizeMode: "contain" },
+  markerPoint: { position: "absolute", right: -5, bottom: -5, width: 18, height: 18, borderRadius: 9, backgroundColor: "#1E3A8A", borderWidth: 2, borderColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
+  markerPointCenter: { width: 4, height: 4, borderRadius: 2, backgroundColor: "#FFFFFF" },
+  stationLogoImage: { width: 31, height: 31, resizeMode: "contain" },
+  detailLogoImage: { width: 46, height: 46, resizeMode: "contain" },
   markerDot: {
     width: "100%",
     height: "100%",
@@ -1599,6 +1676,12 @@ const styles = {
     color: "#6B7280",
     marginTop: 12,
   },
+  stationSkeletonList: { paddingHorizontal: 16, paddingTop: 4, gap: 10 },
+  stationSkeletonCard: { minHeight: 92, padding: 14, flexDirection: "row", alignItems: "center", borderRadius: 12, borderWidth: 1, borderColor: "#E5E7EB", backgroundColor: "#FFFFFF" },
+  stationSkeletonLogo: { width: 48, height: 48, borderRadius: 12, backgroundColor: "#E5E7EB", marginRight: 12 },
+  stationSkeletonBody: { flex: 1, gap: 9 },
+  stationSkeletonLine: { height: 12, borderRadius: 6, backgroundColor: "#E5E7EB" },
+  stationSkeletonLineSmall: { height: 9, backgroundColor: "#F1F5F9" },
   emptyContainer: {
     alignItems: "center",
     justifyContent: "center",
@@ -1615,23 +1698,6 @@ const styles = {
     color: "#9CA3AF",
     textAlign: "center",
     marginTop: 8,
-  },
-  loadingOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(255,255,255,0.9)",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 30,
-  },
-  loadingOverlayText: {
-    marginTop: 16,
-    fontSize: 14,
-    color: "#6B7280",
-    fontWeight: "500",
   },
 };
 
