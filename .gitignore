@@ -5,6 +5,7 @@ node_modules/
 
 # Expo
 .expo/
+.expo-map-check/
 dist/
 dist-api-check/
 web-build/

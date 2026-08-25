@@ -1,8 +1,0 @@
-
-> safetap@1.0.0 start
-> expo start --port 8081
-
-env: load .env
-env: export EXPO_PUBLIC_GOOGLE_MAPS_API_KEY EXPO_PUBLIC_API_URL
-Starting project at C:\Users\peshelg\Desktop\Systems\Safetap-agentic\safetap
-Starting Metro Bundler

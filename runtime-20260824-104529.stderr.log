@@ -1,6 +1,0 @@
-Skipping dependency validation in offline mode
-Error: Premature close
-    at onclose (node:internal/streams/end-of-stream:159:30)
-    at processTicksAndRejections (node:internal/process/task_queues:77:11)
-Warning: Unable to resolve manifest assets. Icons and fonts might not work. This operation was aborted.
-Warning: Unable to resolve manifest assets. Icons and fonts might not work. This operation was aborted.

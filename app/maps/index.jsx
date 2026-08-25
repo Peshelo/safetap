@@ -1,19 +1,19 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
   Alert,
-  ActivityIndicator,
   Linking,
   Platform,
   TouchableOpacity,
-  TextInput,
   Animated,
   Dimensions,
   ScrollView,
-  FlatList,
+  Keyboard,
+  LayoutAnimation,
   PanResponder,
   StatusBar,
+  Image,
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
@@ -22,15 +22,22 @@ import api from "../../lib/connection";
 import useNetworkStatus from "../hooks/useNetworkStatus";
 import OfflineBanner from "../components/OfflineBanner";
 import { Ionicons } from "../components/Icons";
-import { Image } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import BottomSheet, { BottomSheetFlatList, BottomSheetTextInput, BottomSheetView } from "@gorhom/bottom-sheet";
+
 
 // ─── IMPORTANT ─────────────────────────────────────────────────────────────────
-// Replace with your actual Google Maps API key with Directions API enabled
-const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || "";
 // ────────────────────────────────────────────────────────────────────────────────
 
-const { width, height } = Dimensions.get("window");
+const { height } = Dimensions.get("window");
+const DETAIL_SHEET_FRACTION = 0.42;
+const STATION_PREVIEW_COUNT = 2;
+const SHEET_SPRING = {
+  damping: 24,
+  stiffness: 260,
+  mass: 0.9,
+  useNativeDriver: true,
+};
 const MAP_STYLE = [
   { elementType: "geometry", stylers: [{ color: "#F4F6F8" }] },
   { elementType: "labels.text.fill", stylers: [{ color: "#52606D" }] },
@@ -49,9 +56,9 @@ const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 };
@@ -66,58 +73,28 @@ const isValidCoordinate = (lat, lng) =>
   parseFloat(lat) !== 0 &&
   parseFloat(lng) !== 0;
 
-const decodePolyline = (encoded) => {
-  const points = [];
-  let index = 0;
-  const len = encoded.length;
-  let lat = 0;
-  let lng = 0;
-
-  while (index < len) {
-    let shift = 0;
-    let result = 0;
-    let byte;
-    do {
-      byte = encoded.charCodeAt(index++) - 63;
-      result |= (byte & 0x1f) << shift;
-      shift += 5;
-    } while (byte >= 0x20);
-    const dLat = result & 1 ? ~(result >> 1) : result >> 1;
-    lat += dLat;
-
-    shift = 0;
-    result = 0;
-    do {
-      byte = encoded.charCodeAt(index++) - 63;
-      result |= (byte & 0x1f) << shift;
-      shift += 5;
-    } while (byte >= 0x20);
-    const dLng = result & 1 ? ~(result >> 1) : result >> 1;
-    lng += dLng;
-
-    points.push({ latitude: lat / 1e5, longitude: lng / 1e5 });
-  }
-  return points;
-};
-
-const stripHtml = (html) => html?.replace(/<[^>]*>/g, "") ?? "";
-
 // ── Component ─────────────────────────────────────────────────────────────────
 const PoliceMap = () => {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const isOnline = useNetworkStatus();
   const mapRef = useRef(null);
+  const directorySheetRef = useRef(null);
   const regionFetchTimer = useRef(null);
   const stationSearchTimer = useRef(null);
+  const mapInteractionTimer = useRef(null);
+  const mapDraggingRef = useRef(false);
+  const detailsVisibleBeforeDrag = useRef(false);
+  const sheetVisibleBeforeDrag = useRef(true);
   const searchRequestId = useRef(0);
   const lastFetchCenter = useRef(null);
 
   // Animation values
-  const sheetAnim = useRef(new Animated.Value(0)).current;
   const detailsSheetAnim = useRef(new Animated.Value(height)).current;
-  const overlayAnim = useRef(new Animated.Value(0)).current;
   const detailsOverlayAnim = useRef(new Animated.Value(0)).current;
+  const radarAnim = useRef(new Animated.Value(0)).current;
+  const centerPinLift = useRef(new Animated.Value(0)).current;
+  const searchInputRef = useRef(null);
 
   // Core state
   const [userCoords, setUserCoords] = useState(null);
@@ -132,42 +109,28 @@ const PoliceMap = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStation, setSelectedStation] = useState(null);
-  const [isSheetOpen, setIsSheetOpen] = useState(true);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const [stationPage, setStationPage] = useState(1);
-  const [hasMoreStations, setHasMoreStations] = useState(false);
-  const [loadingMoreStations, setLoadingMoreStations] = useState(false);
+  const [isSheetVisible, setIsSheetVisible] = useState(true);
+  const [isMapDragging, setIsMapDragging] = useState(false);
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const [nearestOffset, setNearestOffset] = useState(0);
+  const [searchRadius, setSearchRadius] = useState(35);
+  const [isSearchingFarther, setIsSearchingFarther] = useState(false);
+  const directorySnapPoints = useMemo(() => ["40%", "92%"], []);
 
-  // Navigation state
-  const [routeCoords, setRouteCoords] = useState([]);
-  const [routeSteps, setRouteSteps] = useState([]);
-  const [routeSummary, setRouteSummary] = useState(null);
-  const [isNavigating, setIsNavigating] = useState(false);
-  const [navLoading, setNavLoading] = useState(false);
+  const [routeCoords] = useState([]);
+  const [routeSteps] = useState([]);
+  const [routeSummary] = useState(null);
+  const [isNavigating] = useState(false);
   const [activeStepIndex, setActiveStepIndex] = useState(0);
 
   // ── Pan responders ────────────────────────────────────────────────────────
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 10,
-      onPanResponderMove: (_, g) => {
-        if (g.dy > 0) sheetAnim.setValue(Math.min(g.dy, 300));
-      },
-      onPanResponderRelease: (_, g) => {
-        if (g.dy > 100 || g.vy > 0.5) closeSheet();
-        else openSheet();
-      },
-    })
-  ).current;
-
   const detailsPanResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 10,
       onPanResponderMove: (_, g) => {
-        if (g.dy > 0)
-          detailsSheetAnim.setValue(Math.max(height - 600 + g.dy, 0));
+        if (g.dy > 0) detailsSheetAnim.setValue(g.dy);
       },
       onPanResponderRelease: (_, g) => {
         if (g.dy > 100 || g.vy > 0.5) closeDetailsSheet();
@@ -196,19 +159,19 @@ const PoliceMap = () => {
     const stations = withinFiftyKm.length >= 3 ? withinFiftyKm : allStations.slice(0, 3);
     setPoliceStations(stations);
     setFilteredStations(stations);
-    setHasMoreStations(false);
     return stations;
   };
 
-  const fetchPoliceStations = async (center = userCoords, page = 1) => {
+  const fetchPoliceStations = async (center = userCoords, page = 1, radiusKm = searchRadius) => {
     try {
       if (!center) return;
+      const safeRadiusKm = Math.min(Math.max(Number(radiusKm) || 35, 1), 200);
       if (policeStations.length === 0) setLoading(true);
-      
+
       if (isOnline) {
-        const payload = await api.nearbyStations(center.latitude, center.longitude, 35, page, 20);
+        const payload = await api.nearbyStations(center.latitude, center.longitude, safeRadiusKm, page, 50);
         const records = payload.items || [];
-        
+
         const stationsWithCoords = records
           .filter((s) => isValidCoordinate(parseFloat(s.latitude), parseFloat(s.longitude)))
           .map((s) => {
@@ -230,9 +193,8 @@ const PoliceMap = () => {
 
         setPoliceStations(stationsWithCoords);
         setFilteredStations(stationsWithCoords);
-        setStationPage(page);
-        setHasMoreStations(Boolean(payload.has_more));
         lastFetchCenter.current = center;
+        return stationsWithCoords;
       } else {
         await loadStationsFromCache(center);
       }
@@ -245,44 +207,35 @@ const PoliceMap = () => {
     }
   };
 
-  const loadMoreStations = async () => {
-    if (!hasMoreStations || loadingMoreStations || !lastFetchCenter.current) return;
-    try {
-      setLoadingMoreStations(true);
-      const nextPage = stationPage + 1;
-      const center = lastFetchCenter.current;
-      const payload = await api.nearbyStations(center.latitude, center.longitude, 35, nextPage, 20);
-      const nextStations = (payload.items || [])
-        .filter((station) => isValidCoordinate(station.latitude, station.longitude))
-        .map((station) => ({
-          id: station.id,
-          station: station.station || station.name || "Police Station",
-          latitude: parseFloat(station.latitude),
-          longitude: parseFloat(station.longitude),
-          phone: station.phone,
-          address: station.address || "Address not available",
-          description: station.description || "No description available",
-          operating_hours: station.operating_hours || "24/7",
-          distance: station.distance_km,
-        }));
-      setPoliceStations((current) => [...current, ...nextStations.filter((item) => !current.some((existing) => existing.id === item.id))]);
-      setStationPage(nextPage);
-      setHasMoreStations(Boolean(payload.has_more));
-    } catch (error) {
-      Alert.alert("Error", "Could not load more nearby stations");
-    } finally {
-      setLoadingMoreStations(false);
-    }
-  };
-
   const handleRegionChangeComplete = (region) => {
     setMapRegion(region);
+    if (!searchQuery.trim()) {
+      const recenteredStations = policeStations
+        .map((station) => ({
+          ...station,
+          distance: getDistanceFromLatLonInKm(region.latitude, region.longitude, station.latitude, station.longitude),
+        }))
+        .sort((a, b) => a.distance - b.distance);
+      setPoliceStations(recenteredStations);
+      setFilteredStations(recenteredStations);
+    }
+    if (mapDraggingRef.current) {
+      clearTimeout(mapInteractionTimer.current);
+      mapInteractionTimer.current = setTimeout(() => {
+        mapDraggingRef.current = false;
+        setIsMapDragging(false);
+        Animated.spring(centerPinLift, { toValue: 0, damping: 18, stiffness: 240, useNativeDriver: true }).start();
+        if (sheetVisibleBeforeDrag.current) openSheet();
+        if (detailsVisibleBeforeDrag.current && selectedStation) openDetailsSheet();
+        detailsVisibleBeforeDrag.current = false;
+      }, 220);
+    }
     if (!isOnline || isNavigating) return;
     const previous = lastFetchCenter.current;
     const movedKm = previous
       ? getDistanceFromLatLonInKm(previous.latitude, previous.longitude, region.latitude, region.longitude)
       : Infinity;
-    if (movedKm < 4) return;
+    if (movedKm < 0.25) return;
     clearTimeout(regionFetchTimer.current);
     regionFetchTimer.current = setTimeout(() => fetchPoliceStations(region), 450);
   };
@@ -334,171 +287,149 @@ const PoliceMap = () => {
 
   // ── Sheet helpers ─────────────────────────────────────────────────────────
   const openSheet = () => {
-    setIsSheetOpen(true);
-    Animated.parallel([
-      Animated.spring(sheetAnim, {
-        toValue: 0,
-        tension: 50,
-        friction: 12,
-        useNativeDriver: true,
-      }),
-      Animated.timing(overlayAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    setIsSheetVisible(true);
+    requestAnimationFrame(() => directorySheetRef.current?.snapToIndex(isSearchExpanded ? 1 : 0));
   };
 
   const closeSheet = () => {
-    Animated.parallel([
-      Animated.spring(sheetAnim, {
-        toValue: 300,
-        tension: 50,
-        friction: 12,
-        useNativeDriver: true,
-      }),
-      Animated.timing(overlayAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start(() => setIsSheetOpen(false));
+    directorySheetRef.current?.close();
+  };
+
+  const setSearchExpanded = (expanded) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsSearchExpanded(expanded);
+    setIsSheetVisible(true);
+    directorySheetRef.current?.snapToIndex(expanded ? 1 : 0);
+  };
+
+  const finishSearch = () => {
+    Keyboard.dismiss();
+    setSearchExpanded(false);
+  };
+
+  const cancelSearch = () => {
+    setSearchQuery("");
+    searchInputRef.current?.blur();
+    finishSearch();
+  };
+
+  const findNextNearest = async () => {
+    const nextOffset = nearestOffset + 1;
+    if (nextOffset < stationsWithValidCoords.length) {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setNearestOffset(nextOffset);
+      const nextStation = stationsWithValidCoords[nextOffset];
+      setSelectedStation(nextStation);
+      mapRef.current?.animateToRegion(
+        {
+          latitude: nextStation.latitude,
+          longitude: nextStation.longitude,
+          latitudeDelta: Math.min(mapRegion.latitudeDelta || 0.025, 0.025),
+          longitudeDelta: Math.min(mapRegion.longitudeDelta || 0.025, 0.025),
+        },
+        550
+      );
+      return;
+    }
+
+    if (!isOnline || isSearchingFarther) return;
+    if (searchRadius >= 200) return;
+    const nextRadius = Math.min(searchRadius + 25, 200);
+    setIsSearchingFarther(true);
+    try {
+      const stations = await fetchPoliceStations(userCoords || mapRegion, 1, nextRadius);
+      setSearchRadius(nextRadius);
+      if (stations?.length > nearestOffset + 1) {
+        const nextStation = stations[nearestOffset + 1];
+        setNearestOffset(nearestOffset + 1);
+        setSelectedStation(nextStation);
+        mapRef.current?.animateToRegion(
+          {
+            latitude: nextStation.latitude,
+            longitude: nextStation.longitude,
+            latitudeDelta: Math.min(mapRegion.latitudeDelta || 0.025, 0.025),
+            longitudeDelta: Math.min(mapRegion.longitudeDelta || 0.025, 0.025),
+          },
+          550
+        );
+      }
+    } finally {
+      setIsSearchingFarther(false);
+    }
+  };
+
+  const hideDrawersWhileDragging = () => {
+    if (mapDraggingRef.current || isNavigating) return;
+    mapDraggingRef.current = true;
+    setIsMapDragging(true);
+    Animated.spring(centerPinLift, { toValue: 1, damping: 16, stiffness: 260, useNativeDriver: true }).start();
+    sheetVisibleBeforeDrag.current = isSheetVisible;
+    detailsVisibleBeforeDrag.current = isDetailsOpen;
+    closeSheet();
+    if (isDetailsOpen) {
+      Animated.parallel([
+        Animated.timing(detailsSheetAnim, { toValue: height, duration: 160, useNativeDriver: true }),
+        Animated.timing(detailsOverlayAnim, { toValue: 0, duration: 160, useNativeDriver: true }),
+      ]).start();
+    }
   };
 
   const openDetailsSheet = () => {
     setIsDetailsOpen(true);
     Animated.parallel([
       Animated.spring(detailsSheetAnim, {
-        toValue: height - 600,
-        tension: 50,
-        friction: 12,
-        useNativeDriver: true,
+        toValue: 0,
+        ...SHEET_SPRING,
       }),
       Animated.timing(detailsOverlayAnim, {
         toValue: 1,
-        duration: 200,
+        duration: 180,
         useNativeDriver: true,
       }),
     ]).start();
   };
 
-  const closeDetailsSheet = () => {
+  const closeDetailsSheet = ({ clearSelection = true, restoreDirectory = true } = {}) => {
     Animated.parallel([
       Animated.spring(detailsSheetAnim, {
         toValue: height,
-        tension: 50,
-        friction: 12,
-        useNativeDriver: true,
+        ...SHEET_SPRING,
       }),
       Animated.timing(detailsOverlayAnim, {
         toValue: 0,
-        duration: 200,
+        duration: 180,
         useNativeDriver: true,
       }),
-    ]).start(() => {
+    ]).start(({ finished }) => {
+      if (!finished) return;
       setIsDetailsOpen(false);
-      setSelectedStation(null);
+      if (clearSelection) setSelectedStation(null);
+      if (restoreDirectory) openSheet();
     });
   };
 
   // ── In-app Navigation using Directions API ─────────────────────────────────
   const handleNavigate = async (station) => {
-    if (!GOOGLE_MAPS_API_KEY) {
-      Alert.alert("Navigation unavailable", "Add EXPO_PUBLIC_GOOGLE_MAPS_API_KEY to enable route directions.");
-      return;
-    }
     if (!isValidCoordinate(station.latitude, station.longitude)) {
-      Alert.alert("Navigation Error", "Cannot navigate — invalid station location.");
-      return;
-    }
-    if (!userCoords) {
-      Alert.alert("Navigation Error", "Your location is not available yet.");
+      Alert.alert("Navigation unavailable", "This station does not have a valid map location.");
       return;
     }
 
-    setNavLoading(true);
+    const destination = `${station.latitude},${station.longitude}`;
+    const nativeUrl = Platform.OS === "ios"
+      ? `maps://?daddr=${destination}&dirflg=d`
+      : `google.navigation:q=${destination}&mode=d`;
+    const fallbackUrl = `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving`;
+
     try {
-      const origin = `${userCoords.latitude},${userCoords.longitude}`;
-      const destination = `${station.latitude},${station.longitude}`;
-      const url =
-        `https://maps.googleapis.com/maps/api/directions/json` +
-        `?origin=${origin}&destination=${destination}` +
-        `&mode=driving&key=${GOOGLE_MAPS_API_KEY}`;
-
-      const response = await fetch(url);
-      const data = await response.json();
-
-      if (data.status !== "OK" || !data.routes?.length) {
-        Alert.alert(
-          "Route Error",
-          `Could not fetch route: ${data.status}. Please check your API key.`
-        );
-        await fetchPoliceStations(mapRegion);
-        return;
-      }
-
-      const leg = data.routes[0].legs[0];
-      const encodedPolyline = data.routes[0].overview_polyline.points;
-      const decoded = decodePolyline(encodedPolyline);
-
-      // Build step list
-      const steps = leg.steps.map((step, i) => ({
-        index: i,
-        instruction: stripHtml(step.html_instructions),
-        distance: step.distance?.text ?? "",
-        duration: step.duration?.text ?? "",
-        maneuver: step.maneuver ?? "",
-        startLocation: step.start_location,
-        endLocation: step.end_location,
-      }));
-
-      setRouteCoords(decoded);
-      setRouteSteps(steps);
-      setRouteSummary({
-        distance: leg.distance?.text,
-        duration: leg.duration?.text,
-      });
-      setActiveStepIndex(0);
-      setIsNavigating(true);
-
-      // Close details sheet, keep station selected
-      closeDetailsSheet();
-
-      // Fit map to show the whole route
-      if (mapRef.current && decoded.length > 0) {
-        mapRef.current.fitToCoordinates(decoded, {
-          edgePadding: { top: 120, right: 40, bottom: 300, left: 40 },
-          animated: true,
-        });
-      }
-    } catch (err) {
-      console.error("Directions fetch error:", err);
-      Alert.alert(
-        "Navigation Error",
-        "Failed to fetch route. Check your internet connection."
-      );
-      await fetchPoliceStations(mapRegion);
-    } finally {
-      setNavLoading(false);
+      const canOpenNativeMaps = await Linking.canOpenURL(nativeUrl);
+      await Linking.openURL(canOpenNativeMaps ? nativeUrl : fallbackUrl);
+    } catch {
+      Alert.alert("Navigation unavailable", "Could not open a maps application on this device.");
     }
   };
 
-  const cancelNavigation = () => {
-    setIsNavigating(false);
-    setRouteCoords([]);
-    setRouteSteps([]);
-    setRouteSummary(null);
-    setActiveStepIndex(0);
-    
-    // Reset map to show user location
-    if (userCoords && mapRef.current) {
-      mapRef.current.animateToRegion(
-        { ...userCoords, latitudeDelta: 0.0922, longitudeDelta: 0.0421 },
-        500
-      );
-    }
-  };
+  const cancelNavigation = () => openSheet();
 
   // ── Other actions ─────────────────────────────────────────────────────────
   const handleCall = (station) => {
@@ -518,13 +449,17 @@ const PoliceMap = () => {
       return;
     }
     setSelectedStation(station);
+    closeSheet();
     if (mapRef.current) {
+      const latitudeDelta = Math.min(mapRegion.latitudeDelta || 0.025, 0.025);
+      const longitudeDelta = Math.min(mapRegion.longitudeDelta || 0.025, 0.025);
       mapRef.current.animateToRegion(
         {
-          latitude: station.latitude,
+          // Keep the marker centred in the visible map above the detail drawer.
+          latitude: station.latitude - latitudeDelta * (DETAIL_SHEET_FRACTION / 2),
           longitude: station.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
+          latitudeDelta,
+          longitudeDelta,
         },
         500
       );
@@ -582,11 +517,38 @@ const PoliceMap = () => {
   useEffect(() => () => {
     clearTimeout(regionFetchTimer.current);
     clearTimeout(stationSearchTimer.current);
+    clearTimeout(mapInteractionTimer.current);
   }, []);
+
+  useEffect(() => {
+    const keyboardListener = Keyboard.addListener("keyboardDidHide", () => {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setIsSearchExpanded(false);
+    });
+    return () => keyboardListener.remove();
+  }, []);
+
+  useEffect(() => {
+    if (!isSearchingFarther) {
+      radarAnim.stopAnimation();
+      radarAnim.setValue(0);
+      return;
+    }
+    const pulse = Animated.loop(
+      Animated.timing(radarAnim, {
+        toValue: 1,
+        duration: 1500,
+        useNativeDriver: true,
+      })
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [isSearchingFarther, radarAnim]);
 
   useEffect(() => {
     clearTimeout(stationSearchTimer.current);
     const query = searchQuery.trim();
+    setNearestOffset(0);
     if (!query) {
       searchRequestId.current += 1;
       setFilteredStations(policeStations);
@@ -640,11 +602,14 @@ const PoliceMap = () => {
   const stationsWithValidCoords = filteredStations.filter((s) =>
     isValidCoordinate(s.latitude, s.longitude)
   );
+  const nearestStationPreview = isSearchExpanded
+    ? stationsWithValidCoords
+    : stationsWithValidCoords.slice(nearestOffset, nearestOffset + STATION_PREVIEW_COUNT);
 
   // ── Render helpers ────────────────────────────────────────────────────────
   const renderStationCard = (station, index) => {
     const isSelected = selectedStation?.id === station.id;
-    const distance = calculateStationDistance(station);
+    const distance = station.distance ?? calculateStationDistance(station);
 
     return (
       <TouchableOpacity
@@ -680,13 +645,8 @@ const PoliceMap = () => {
               </Text>
             </View>
 
-            {station.phone && (
-              <View style={styles.stationPhone}>
-                <Ionicons name="phone" size={12} color="#6B7280" />
-                <Text style={styles.stationPhoneText}>{station.phone}</Text>
-              </View>
-            )}
           </View>
+          <Ionicons name="chevron-forward" size={19} color="#94A3B8" />
         </View>
       </TouchableOpacity>
     );
@@ -694,7 +654,7 @@ const PoliceMap = () => {
 
   // ── Navigation Panel (step-by-step directions) ───────────────────────────
   const NavigationPanel = () => (
-    <View style={styles.navigationPanel}>
+    <View style={[styles.navigationPanel, { bottom: insets.bottom }]}>
       <View style={styles.sheetHandle}>
         <View style={styles.sheetHandleBar} />
       </View>
@@ -782,7 +742,7 @@ const PoliceMap = () => {
         {/* Destination reached */}
         <View style={styles.destinationItem}>
           <View style={styles.destinationIcon}>
-            <Ionicons name="shield-alt" size={14} color="#FFFFFF" />
+            <Image source={require("../../assets/images/logo-alternate.png")} style={styles.destinationLogoImage} />
           </View>
           <Text style={styles.destinationText}>
             {selectedStation?.station ?? "Destination"}
@@ -799,7 +759,7 @@ const PoliceMap = () => {
 
   // ── JSX ───────────────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={styles.container} edges={["bottom"]}>
+    <SafeAreaView style={styles.container} edges={[]}>
       <StatusBar barStyle="dark-content" backgroundColor="#F9FAFB" />
       <Stack.Screen options={{ headerShown: false }} />
 
@@ -810,12 +770,14 @@ const PoliceMap = () => {
           provider={PROVIDER_GOOGLE}
           style={styles.map}
           initialRegion={mapRegion}
+          onPanDrag={hideDrawersWhileDragging}
           onRegionChangeComplete={handleRegionChangeComplete}
           customMapStyle={MAP_STYLE}
           showsUserLocation
           showsMyLocationButton={false}
           showsCompass
           toolbarEnabled={false}
+          moveOnMarkerPress={false}
         >
           {/* Station markers */}
           {!isNavigating && stationsWithValidCoords.map((station, index) => {
@@ -831,8 +793,9 @@ const PoliceMap = () => {
               >
                 <View style={[styles.marker, isSelected && styles.markerSelected]}>
                   <Image source={require("../../assets/images/logo-alternate.png")} style={styles.markerLogoImage} />
-                  <View style={styles.markerPoint}><View style={styles.markerPointCenter} /></View>
                 </View>
+                                  <View style={styles.markerPoint}><View style={styles.markerPointCenter} /></View>
+
               </Marker>
             );
           })}
@@ -848,90 +811,179 @@ const PoliceMap = () => {
           )}
         </MapView>
 
-        {/* Header with faint background */}
+        {!isNavigating && !isDetailsOpen && !isSearchExpanded && (
+          <View pointerEvents="none" style={styles.centerPointLayer}>
+            <Animated.View
+              style={[
+                styles.centerPointContent,
+                {
+                  transform: [
+                    { translateY: centerPinLift.interpolate({ inputRange: [0, 1], outputRange: [0, -14] }) },
+                    { scale: centerPinLift.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] }) },
+                  ],
+                },
+              ]}
+            >
+              <View style={styles.centerPointLabel}>
+                <Text style={styles.centerPointEyebrow}>SEARCH POINT</Text>
+                <Text style={styles.centerPointName} numberOfLines={1}>
+                  {isMapDragging ? "Move map to choose" : nearestStationPreview[0]?.station || "Finding nearest station"}
+                </Text>
+              </View>
+              <View style={styles.centerPinHead}>
+                <View style={styles.centerPinCore} />
+              </View>
+              <View style={styles.centerPinStem} />
+              <Animated.View
+                style={[
+                  styles.centerPinShadow,
+                  {
+                    opacity: centerPinLift.interpolate({ inputRange: [0, 1], outputRange: [0.18, 0.08] }),
+                    transform: [{ scale: centerPinLift.interpolate({ inputRange: [0, 1], outputRange: [1, 0.7] }) }],
+                  },
+                ]}
+              />
+            </Animated.View>
+          </View>
+        )}
+
+        {/* Minimal floating map controls */}
         <View style={[styles.headerOverlay, { paddingTop: insets.top + 8 }]}>
           <View style={styles.header}>
-            <TouchableOpacity
-              style={styles.headerButton}
-              onPress={() => {
-                if (isNavigating) cancelNavigation();
-                else router.back();
-              }}
-            >
-              <Ionicons name={isNavigating ? "close" : "arrow-back"} size={24} color="#1F2937" />
-            </TouchableOpacity>
-
-            <View style={styles.headerTitleContainer}>
-              <Text style={styles.headerTitle}>
-                {isNavigating ? "Navigation" : "Police Stations"}
-              </Text>
-              {!isNavigating && (
-                <Text style={styles.headerSubtitle}>
-                  {stationsWithValidCoords.length} stations nearby
-                </Text>
-              )}
-            </View>
-
-            {!isNavigating && (
+            <View style={styles.headerCard}>
               <TouchableOpacity
                 style={styles.headerButton}
-                onPress={focusOnUser}
+                onPress={() => {
+                  if (isNavigating) cancelNavigation();
+                  else router.back();
+                }}
               >
-                <Ionicons name="target" size={24} color="#1F2937" />
+                <Ionicons name={isNavigating ? "close" : "chevron-back"} size={22} color="#FFFFFF" />
               </TouchableOpacity>
-            )}
-            {isNavigating && <View style={styles.headerButton} />}
-          </View>
-
-          {/* Search Bar - hidden while navigating */}
-          {!isNavigating && (
-            <View style={styles.searchContainer}>
-              <View style={styles.searchBar}>
-                <Ionicons name="search" size={20} color="#9CA3AF" />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Search police stations..."
-                  placeholderTextColor="#9CA3AF"
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                />
-                {searchQuery.length > 0 && (
-                  <TouchableOpacity onPress={() => setSearchQuery("")}>
-                    <Ionicons name="close-circle" size={18} color="#9CA3AF" />
-                  </TouchableOpacity>
-                )}
+              <View style={styles.headerLogo}>
+                <Image source={require("../../assets/images/logo-alternate.png")} style={styles.headerLogoImage} />
+              </View>
+              <View style={styles.headerCopy}>
+                <Text style={styles.headerTitle}>{isNavigating ? "Navigation" : "Police stations"}</Text>
+                <Text style={styles.headerSubtitle}>{isNavigating ? "Route guidance" : "Nearby and ready to help"}</Text>
               </View>
             </View>
-          )}
+          </View>
+
         </View>
+
+        {!isNavigating && (
+          <TouchableOpacity
+            style={[
+              styles.floatingLocateButton,
+              {
+                bottom:
+                  insets.bottom +
+                  (isDetailsOpen ? height * DETAIL_SHEET_FRACTION + 16 : isSheetVisible ? height * 0.4 + 16 : 86),
+              },
+            ]}
+            onPress={focusOnUser}
+            accessibilityRole="button"
+            accessibilityLabel="Centre map on my location"
+          >
+            <Ionicons name="target" size={24} color="#1E3A8A" />
+          </TouchableOpacity>
+        )}
 
         {!isOnline && <OfflineBanner />}
 
         {/* Bottom Sheet - Only show when not navigating */}
-        {!isNavigating && (
-          <Animated.View
-            style={[
-              styles.bottomSheet,
-              {
-                transform: [{ translateY: sheetAnim }],
-              },
-            ]}
+        {!isNavigating && !isDetailsOpen && (
+          <BottomSheet
+            ref={directorySheetRef}
+            index={0}
+            snapPoints={directorySnapPoints}
+            enablePanDownToClose
+            enableDynamicSizing={false}
+            bottomInset={insets.bottom}
+            keyboardBehavior="extend"
+            keyboardBlurBehavior="restore"
+            android_keyboardInputMode="adjustResize"
+            onChange={(index) => {
+              setIsSheetVisible(index >= 0);
+              const expanded = index === 1;
+              if (expanded !== isSearchExpanded) setIsSearchExpanded(expanded);
+            }}
+            onClose={() => {
+              setIsSheetVisible(false);
+              setIsSearchExpanded(false);
+              Keyboard.dismiss();
+            }}
+            backgroundStyle={styles.bottomSheetBackground}
+            handleIndicatorStyle={styles.bottomSheetIndicator}
           >
-            <View style={styles.sheetHandle} {...panResponder.panHandlers}>
-              <View style={styles.sheetHandleBar} />
-            </View>
-
-            <View style={styles.sheetContent}>
+            <BottomSheetView style={styles.sheetContent}>
+              <View style={styles.searchBar}>
+                <Ionicons name="search-outline" size={23} color="#111827" />
+                <BottomSheetTextInput
+                  ref={searchInputRef}
+                  style={styles.searchInput}
+                  placeholder="Search station or district"
+                  placeholderTextColor="#94A3B8"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  onFocus={() => setSearchExpanded(true)}
+                  onSubmitEditing={finishSearch}
+                  returnKeyType="search"
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchQuery("")} accessibilityLabel="Clear station search">
+                    <Ionicons name="close-circle" size={20} color="#94A3B8" />
+                  </TouchableOpacity>
+                )}
+                {isSearchExpanded && (
+                  <TouchableOpacity onPress={cancelSearch} accessibilityLabel="Cancel station search">
+                    <Text style={styles.searchCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
               <View style={styles.sheetHeader}>
-                <Text style={styles.sheetTitle}>Police Stations</Text>
-                <Text style={styles.sheetSubtitle}>
-                  {filteredStations.length} total · {stationsWithValidCoords.length} on map
-                </Text>
+                <View>
+                  <Text style={styles.sheetTitle}>{searchQuery ? "Search results" : "Nearest stations"}</Text>
+                  <Text style={styles.sheetSubtitle}>
+                    {filteredStations.length} total · {stationsWithValidCoords.length} on map
+                  </Text>
+                </View>
+                {!searchQuery && !isSearchExpanded && (
+                  <TouchableOpacity
+                    style={styles.nextNearestButton}
+                    onPress={findNextNearest}
+                    disabled={isSearchingFarther || (searchRadius >= 200 && nearestOffset + 1 >= stationsWithValidCoords.length)}
+                    accessibilityLabel="Find the next nearest police station"
+                  >
+                    <View style={styles.radarIcon}>
+                      {isSearchingFarther && (
+                        <Animated.View
+                          style={[
+                            styles.radarWave,
+                            {
+                              opacity: radarAnim.interpolate({ inputRange: [0, 1], outputRange: [0.18, 0] }),
+                              transform: [{ scale: radarAnim.interpolate({ inputRange: [0, 1], outputRange: [0.65, 1.8] }) }],
+                            },
+                          ]}
+                        />
+                      )}
+                      <Ionicons name="radio-outline" size={15} color="#1E3A8A" />
+                    </View>
+                    <Text style={styles.nextNearestText}>
+                      {isSearchingFarther
+                        ? "Looking…"
+                        : searchRadius >= 200 && nearestOffset + 1 >= stationsWithValidCoords.length
+                          ? "No more nearby"
+                          : "Next nearest"}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
               {loading ? (
                 <View style={styles.stationSkeletonList}>
-                  {[0, 1, 2].map((item) => (
+                  {[0, 1].map((item) => (
                     <View key={item} style={styles.stationSkeletonCard}>
                       <View style={styles.stationSkeletonLogo} />
                       <View style={styles.stationSkeletonBody}>
@@ -953,19 +1005,32 @@ const PoliceMap = () => {
                   </Text>
                 </View>
               ) : (
-                <FlatList
-                  data={filteredStations}
+                <BottomSheetFlatList
+                  data={nearestStationPreview}
                   keyExtractor={(station, index) => String(station.id || index)}
                   renderItem={({ item, index }) => renderStationCard(item, index)}
                   showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
                   style={styles.stationsList}
-                  onEndReached={searchQuery ? undefined : loadMoreStations}
-                  onEndReachedThreshold={0.35}
-                  ListFooterComponent={loadingMoreStations ? <ActivityIndicator color="#1E3A8A" style={{ marginVertical: 16 }} /> : null}
                 />
               )}
+            </BottomSheetView>
+          </BottomSheet>
+        )}
+
+        {!isNavigating && !isSheetVisible && !isDetailsOpen && !isMapDragging && (
+          <TouchableOpacity
+            style={[styles.drawerPeek, { bottom: insets.bottom + 14 }]}
+            onPress={openSheet}
+            accessibilityRole="button"
+            accessibilityLabel="Show nearby stations"
+          >
+            <View style={styles.drawerPeekLogo}>
+              <Image source={require("../../assets/images/logo-alternate.png")} style={styles.drawerPeekLogoImage} />
             </View>
-          </Animated.View>
+            <Text style={styles.drawerPeekText}>Nearby stations</Text>
+            <Ionicons name="chevron-up" size={20} color="#1E3A8A" />
+          </TouchableOpacity>
         )}
 
         {/* Navigation Panel - Show when navigating */}
@@ -977,13 +1042,20 @@ const PoliceMap = () => {
             style={[
               styles.detailSheet,
               {
+                bottom: insets.bottom,
                 transform: [{ translateY: detailsSheetAnim }],
               },
             ]}
           >
-            <View style={styles.sheetHandle} {...detailsPanResponder.panHandlers}>
+            <TouchableOpacity
+              style={styles.sheetHandle}
+              onPress={() => closeDetailsSheet()}
+              accessibilityRole="button"
+              accessibilityLabel="Close station details"
+              {...detailsPanResponder.panHandlers}
+            >
               <View style={styles.sheetHandleBar} />
-            </View>
+            </TouchableOpacity>
 
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.detailContent}>
@@ -1001,6 +1073,9 @@ const PoliceMap = () => {
                       </Text>
                     </View>
                   </View>
+                  <TouchableOpacity style={styles.detailCloseButton} onPress={() => closeDetailsSheet()} accessibilityLabel="Close station details">
+                    <Ionicons name="close" size={20} color="#475569" />
+                  </TouchableOpacity>
                 </View>
 
                 {/* Quick Actions */}
@@ -1008,16 +1083,9 @@ const PoliceMap = () => {
                   <TouchableOpacity
                     style={[styles.actionButton, styles.navigateButton]}
                     onPress={() => handleNavigate(selectedStation)}
-                    disabled={navLoading}
                   >
-                    {navLoading ? (
-                      <ActivityIndicator color="#FFFFFF" />
-                    ) : (
-                      <>
-                        <Ionicons name="navigation" size={20} color="#FFFFFF" />
-                        <Text style={styles.actionButtonText}>Navigate</Text>
-                      </>
-                    )}
+                    <Ionicons name="open-outline" size={20} color="#FFFFFF" />
+                    <Text style={styles.actionButtonText}>Open Maps</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -1033,7 +1101,7 @@ const PoliceMap = () => {
                 {/* Details */}
                 <View style={styles.detailsSection}>
                   <Text style={styles.sectionTitle}>Station Details</Text>
-                  
+
                   {selectedStation.phone && (
                     <View style={styles.detailRow}>
                       <View style={styles.detailIconSmall}>
@@ -1085,37 +1153,6 @@ const PoliceMap = () => {
                   )}
                 </View>
 
-                {/* Emergency Actions */}
-                <View style={styles.emergencySection}>
-                  <Text style={styles.sectionTitle}>Emergency Actions</Text>
-                  <TouchableOpacity
-                    style={styles.emergencyButton}
-                    onPress={() => Linking.openURL("tel:995")}
-                  >
-                    <View style={styles.emergencyIcon}>
-                      <Ionicons name="emergency" size={20} color="#DC2626" />
-                    </View>
-                    <View style={styles.emergencyContent}>
-                      <Text style={styles.emergencyTitle}>SOS Emergency</Text>
-                      <Text style={styles.emergencySubtitle}>Immediate police dispatch</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={20} color="#DC2626" />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.emergencyButton}
-                    onPress={() => Linking.openURL("tel:995")}
-                  >
-                    <View style={styles.emergencyIcon}>
-                      <Ionicons name="call" size={20} color="#3B82F6" />
-                    </View>
-                    <View style={styles.emergencyContent}>
-                      <Text style={styles.emergencyTitle}>Call Emergency</Text>
-                      <Text style={styles.emergencySubtitle}>Direct police line: 995</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={20} color="#3B82F6" />
-                  </TouchableOpacity>
-                </View>
               </View>
             </ScrollView>
           </Animated.View>
@@ -1150,80 +1187,218 @@ const styles = {
   header: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingBottom: 10,
-    gap: 10,
   },
-  headerButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: "#FFFFFF",
-    justifyContent: "center",
+  headerCard: {
+    flexDirection: "row",
     alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: "#1E3A8A",
+    borderRadius: 24,
+    padding: 5,
+    paddingRight: 16,
     elevation: 7,
     shadowColor: "#0F172A",
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.14,
-    shadowRadius: 8,
+    shadowOpacity: 0.12,
+    shadowRadius: 9,
   },
-  headerTitleContainer: {
+  headerButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "rgba(255,255,255,0.14)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerLogo: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    marginLeft: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerLogoImage: { width: 29, height: 29, resizeMode: "contain" },
+  headerCopy: { marginLeft: 10 },
+  headerTitle: { fontSize: 15, fontWeight: "800", color: "#FFFFFF" },
+  headerSubtitle: { marginTop: 1, fontSize: 11, color: "#BFDBFE" },
+  keyboardAvoider: {
     flex: 1,
-    backgroundColor: "#1E3A8A",
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  },
+  floatingLocateButton: {
+    position: "absolute",
+    right: 18,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 12,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 9,
+  },
+  centerPointLayer: {
+    position: "absolute",
+    top: "50%",
+    left: 0,
+    right: 0,
+    height: 1,
+    alignItems: "center",
+    zIndex: 8,
+  },
+  centerPointContent: {
+    position: "absolute",
+    bottom: -5,
+    alignItems: "center",
+  },
+  centerPointLabel: {
+    maxWidth: 190,
+    minWidth: 132,
+    backgroundColor: "rgba(255,255,255,0.97)",
+    borderRadius: 12,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    marginBottom: 6,
+    elevation: 5,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.14,
+    shadowRadius: 5,
+  },
+  centerPointEyebrow: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#64748B",
+    letterSpacing: 0.7,
+  },
+  centerPointName: {
+    marginTop: 1,
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  centerPinHead: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#2563EB",
+    borderWidth: 3,
+    borderColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
     elevation: 6,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#FFFFFF",
+  centerPinCore: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: "#FFFFFF",
   },
-  headerSubtitle: {
-    fontSize: 12,
-    color: "#DBEAFE",
-    marginTop: 2,
+  centerPinStem: {
+    width: 3,
+    height: 15,
+    backgroundColor: "#2563EB",
   },
-  searchContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 10,
+  centerPinShadow: {
+    width: 8,
+    height: 4,
+    borderRadius: 9,
+    backgroundColor: "#0F172A",
   },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    height: 52,
-    gap: 8,
-    elevation: 7,
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.13,
-    shadowRadius: 10,
+    backgroundColor: "#F4F4F6",
+    borderRadius: 18,
+    paddingHorizontal: 17,
+    height: 58,
+    gap: 11,
+    marginBottom: 14,
   },
   searchInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 17,
     color: "#111827",
   },
+  searchCancelText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#1E3A8A",
+  },
   // Bottom Sheet
+  bottomSheetBackground: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 20,
+  },
+  bottomSheetIndicator: {
+    width: 42,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#CBD5E1",
+  },
   bottomSheet: {
     position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
     backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
     elevation: 20,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
-    maxHeight: height * 0.52,
+    maxHeight: height * 0.92,
+  },
+  drawerPeek: {
+    position: "absolute",
+    left: 20,
+    right: 20,
+    bottom: 14,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: "#FFFFFF",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    elevation: 16,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+  },
+  drawerPeekLogo: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  drawerPeekLogoImage: { width: 30, height: 30, resizeMode: "contain" },
+  drawerPeekText: {
+    flex: 1,
+    marginLeft: 11,
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#0F172A",
   },
   sheetHandle: {
     alignItems: "center",
@@ -1237,15 +1412,47 @@ const styles = {
   },
   sheetContent: {
     flex: 1,
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     paddingBottom: 20,
   },
   sheetHeader: {
-    marginBottom: 16,
+    marginBottom: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  nextNearestButton: {
+    height: 32,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    backgroundColor: "#F1F5F9",
+  },
+  nextNearestText: {
+    marginLeft: 6,
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#1E3A8A",
+  },
+  radarIcon: {
+    width: 18,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  radarWave: {
+    position: "absolute",
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: "#9a706d",
+    backgroundColor: "#DBEAFE",
   },
   sheetTitle: {
-    fontSize: 22,
-    fontWeight: "800",
+    fontSize: 18,
+    fontWeight: "700",
     color: "#0F172A",
   },
   sheetSubtitle: {
@@ -1258,10 +1465,12 @@ const styles = {
   },
   // Station Card
   stationCard: {
-    backgroundColor: "#F8FAFC",
-    borderRadius: 14,
-    marginBottom: 10,
-    padding: 14,
+    backgroundColor: "#F7F7F8",
+    borderRadius: 16,
+    marginBottom: 8,
+    padding: 11,
+    borderWidth: 1,
+    borderColor: "#EFEFF1",
   },
   stationCardSelected: {
     backgroundColor: "#E8EEF9",
@@ -1274,13 +1483,17 @@ const styles = {
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: "#1E3A8A",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
   },
   stationIconSelected: {
-    backgroundColor: "#3B82F6",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#1E3A8A",
+    borderWidth: 2,
   },
   stationInfo: {
     flex: 1,
@@ -1337,28 +1550,34 @@ const styles = {
     elevation: 5,
   },
   marker: {
-    width: 44,
-    height: 44,
-    borderRadius: 11,
+    width: 40,
+    height: 40,
+    borderRadius: 100,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    elevation: 8,
+    padding: 5,
     alignItems: "center",
     justifyContent: "center",
   },
   markerSelected: {
-    width: 50,
-    height: 50,
-    borderRadius: 13,
+    width: 40,
+    height: 40,
+    borderRadius: 100,
     borderWidth: 2,
     borderColor: "#1E3A8A",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#1E3A8A",
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
   },
-  markerLogoImage: { width: "76%", height: "76%", resizeMode: "contain" },
-  markerPoint: { position: "absolute", right: -5, bottom: -5, width: 18, height: 18, borderRadius: 9, backgroundColor: "#1E3A8A", borderWidth: 2, borderColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
+  markerLogoImage: { width: "100%", height: "100%", resizeMode: "contain" },
+  markerPoint: { position: "absolute", right: -5, bottom: -5, width: 18, height: 18, borderRadius: 9, backgroundColor: "#bf8902", zIndex: 1, borderWidth: 2, borderColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
   markerPointCenter: { width: 4, height: 4, borderRadius: 2, backgroundColor: "#FFFFFF" },
   stationLogoImage: { width: 31, height: 31, resizeMode: "contain" },
   detailLogoImage: { width: 46, height: 46, resizeMode: "contain" },
+  destinationLogoImage: { width: 21, height: 21, resizeMode: "contain" },
   markerDot: {
     width: "100%",
     height: "100%",
@@ -1465,7 +1684,7 @@ const styles = {
     marginRight: 12,
   },
   stepIconActive: {
-    backgroundColor: "#3B82F6",
+    backgroundColor: "#1d50a3",
   },
   stepContent: {
     flex: 1,
@@ -1494,7 +1713,9 @@ const styles = {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: "#EF4444",
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -1527,7 +1748,7 @@ const styles = {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     elevation: 24,
-    maxHeight: height * 0.8,
+    maxHeight: height * DETAIL_SHEET_FRACTION,
   },
   detailContent: {
     paddingHorizontal: 20,
@@ -1542,10 +1763,21 @@ const styles = {
     width: 64,
     height: 64,
     borderRadius: 16,
-    backgroundColor: "#EF4444",
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 16,
+  },
+  detailCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
   },
   detailHeaderInfo: {
     flex: 1,

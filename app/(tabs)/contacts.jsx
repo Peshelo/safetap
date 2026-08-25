@@ -25,41 +25,6 @@ import CustomHeader from "../components/Header";
 
 const { width } = Dimensions.get("window");
 
-const zimbabweProvinces = {
-  Harare: [
-    "Harare Central","Harare South","Harare East","Harare West","Harare North",
-    "Mbare","Highfield","Kuwadzana","Dzivarasekwa","Budiriro","Glen View","Epworth"
-  ],
-  Mashonaland_Central: [
-    "Bindura","Guruve","Mazowe","Mbire","Mount Darwin","Muzarabani","Rushinga","Shamva","Centenary","Concession"
-  ],
-  Mashonaland_West: [
-    "Chegutu","Hurungwe","Kariba","Makonde","Mhondoro-Ngezi","Zvimba","Sanyati","Kadoma","Chinhoyi","Raffingora","Banket"
-  ],
-  Mashonaland_East: [
-    "Chikomba","Goromonzi","Marondera","Mudzi","Murehwa","Mutoko","Seke","UMP","Wedza","Hwedza","Macheke","Nyamapanda"
-  ],
-  Manicaland: [
-    "Buhera","Chimanimani","Chipinge","Makoni","Mutare","Mutasa","Nyanga","Rusape","Penhalonga","Chipinge Town","Hauna","Cashel"
-  ],
-  Midlands: [
-    "Chirumhanzu","Gokwe North","Gokwe South","Gweru","Kwekwe","Mberengwa","Shurugwi","Zvishavane","Redcliff","Mvuma","Lalapanzi","Shangani"
-  ],
-  Masvingo: [
-    "Bikita","Chiredzi","Chivi","Gutu","Masvingo","Mwenezi","Zaka","Mashava","Ngundu","Rutenga","Triangle"
-  ],
-  Matabeleland_North: [
-    "Binga","Bubi","Hwange","Lupane","Nkayi","Tsholotsho","Umguza","Victoria Falls","Kamativi","Dete"
-  ],
-  Matabeleland_South: [
-    "Beitbridge","Bulilima","Gwanda","Insiza","Mangwe","Matobo","Umzingwane","Plumtree","Esigodini","Filabusi"
-  ],
-  Bulawayo: [
-    "Bulawayo Central","Bulawayo South","Bulawayo East","Bulawayo West","Mpopoma",
-    "Entumbane","Nkulumane","Cowdray Park","Luveve","Matshobana","Mabuthweni"
-  ],
-};
-
 const PAGE_SIZE            = 15;
 
 // Bottom padding: floating pill (64) + margin from bottom (14) + safe area + breathing room
@@ -79,6 +44,8 @@ const EmergencyContacts = () => {
   const [selectedProvince,  setSelectedProvince]  = useState("");
   const [selectedDistrict,  setSelectedDistrict]  = useState("");
   const [districts,         setDistricts]         = useState([]);
+  const [provinces,         setProvinces]         = useState([]);
+  const [districtsByProvince, setDistrictsByProvince] = useState({});
   const [usingCachedData,   setUsingCachedData]   = useState(false);
   const [showFilters,       setShowFilters]       = useState(false);
   const [refreshing,        setRefreshing]        = useState(false);
@@ -92,7 +59,36 @@ const EmergencyContacts = () => {
 
   const hasActiveFilters = !!(searchTerm || selectedProvince || selectedDistrict);
 
-  useEffect(() => { fetchFirstPage(); }, []);
+  useEffect(() => {
+    fetchFirstPage();
+    loadDirectoryMetadata();
+  }, []);
+
+  const metadataFromStations = (stations) => {
+    const grouped = {};
+    stations.forEach((station) => {
+      if (!station.province) return;
+      if (!grouped[station.province]) grouped[station.province] = [];
+      if (station.district && !grouped[station.province].includes(station.district)) {
+        grouped[station.province].push(station.district);
+      }
+    });
+    Object.values(grouped).forEach((values) => values.sort((a, b) => a.localeCompare(b)));
+    return grouped;
+  };
+
+  const loadDirectoryMetadata = async () => {
+    try {
+      const metadata = await api.stationDirectoryMetadata();
+      setProvinces(metadata.provinces || []);
+      setDistrictsByProvince(metadata.districts_by_province || {});
+    } catch {
+      const cached = await api.getCachedStations();
+      const grouped = metadataFromStations(cached);
+      setProvinces(Object.keys(grouped).sort((a, b) => a.localeCompare(b)));
+      setDistrictsByProvince(grouped);
+    }
+  };
 
   useEffect(() => {
     if (!isOnline) return;
@@ -105,13 +101,13 @@ const EmergencyContacts = () => {
 
   useEffect(() => {
     if (selectedProvince) {
-      setDistricts(zimbabweProvinces[selectedProvince] || []);
+      setDistricts(districtsByProvince[selectedProvince] || []);
       setSelectedDistrict("");
     } else {
       setDistricts([]);
       setSelectedDistrict("");
     }
-  }, [selectedProvince]);
+  }, [selectedProvince, districtsByProvince]);
 
   useEffect(() => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
@@ -463,7 +459,7 @@ const EmergencyContacts = () => {
               >
                 <Text style={[styles.pillText, !selectedProvince && styles.pillTextActive]}>All</Text>
               </TouchableOpacity>
-              {Object.keys(zimbabweProvinces).map(p => (
+              {provinces.map(p => (
                 <TouchableOpacity
                   key={p}
                   style={[styles.pill, selectedProvince === p && styles.pillActive]}
